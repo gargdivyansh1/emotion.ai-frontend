@@ -286,7 +286,7 @@ const FeedbackDashboard = () => {
                                     </div>
 
                                     <div className="flex justify-between items-center">
-                                        <span className="text-xs text-gray-500">Submitted by: {fb.user_id}</span>
+                                        <span className="text-xs text-white">Submitted by: {fb.user_id}</span>
                                         <button
                                             onClick={() => deleteAdminFeedback(fb.id)}
                                             className="px-4 py-2 bg-red-900/50 hover:bg-red-900/60 text-red-300 rounded-lg border border-red-800 transition-all flex items-center gap-2"

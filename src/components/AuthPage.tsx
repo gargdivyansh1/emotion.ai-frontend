@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -23,6 +24,10 @@ const AuthPage: React.FC = () => {
         setAllowMonitoring(false);
         setIsLogin(!isLogin);
     };
+
+    const goBack = () => {
+        navigate("/");
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,6 +73,13 @@ const AuthPage: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-black px-4">
             <div className="relative flex w-full max-w-5xl h-[600px] bg-gray-900 shadow-2xl rounded-2xl overflow-hidden">
+                <button
+                    onClick={goBack}
+                    className="absolute top-4 left-4 z-30 flex items-center gap-1 text-gray-300 hover:text-white transition-colors"
+                >
+                    <ArrowLeft size={20} />
+                    <span className="text-sm">Back to Home</span>
+                </button>
                 <motion.div
                     className="absolute top-0 h-full w-full md:w-1/2 bg-gray-900 text-white z-20 flex items-center justify-center px-6 md:px-14"
                     animate={{ x: isLogin ? "0%" : "100%" }}

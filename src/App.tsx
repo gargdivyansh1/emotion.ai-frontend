@@ -19,6 +19,8 @@ import BlogPost from './pages/BlogPost';
 import TermsPage from './pages/Terms';
 import NotificationPage from './components/NotificationPage';
 import { AuthProvider } from './context/AuthContext';
+import Documentation from './pages/Documentation'
+import CommunityForum from './pages/CommunityForum'
 
 // Layout for pages that require Sidebar
 const Layout = () => (
@@ -53,6 +55,7 @@ function App() {
             <Route path="/login" element={<Navigate to="/authPage" />} />
             <Route path="/*" element={<Layout />} />
             <Route path="/docs" element={<Docs />} />
+            <Route path="/second-docs" element={<Documentation />} />
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/support" element={<Support />} />
@@ -60,6 +63,7 @@ function App() {
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:id" element={<BlogPost />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/forum" element={<CommunityForum />} />
           </Routes>
         </Router>
       </div>

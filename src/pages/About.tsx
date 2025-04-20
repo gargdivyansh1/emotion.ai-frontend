@@ -103,7 +103,7 @@ const About: React.FC = () => {
             className="bg-gray-800 rounded-xl h-80"
           >
             <div className="h-full flex items-center justify-center text-gray-500">
-              <span>Team photo</span>
+              <img src="src\pages\black.jpg" alt="" />
             </div>
           </motion.div>
         </div>

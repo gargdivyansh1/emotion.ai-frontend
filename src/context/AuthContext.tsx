@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
+import { API_BASE_URL } from '../config';
+
+API_BASE_URL
 
 interface User {
   id: number;

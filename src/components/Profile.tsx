@@ -16,6 +16,7 @@ import {
 import { useMediaQuery } from "react-responsive";
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-tabs/style/react-tabs.css';
+import { Navigate, useNavigate } from "react-router-dom";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -59,6 +60,13 @@ type StatCard = {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 const Profile: React.FC = () => {
+
+  const navigate = useNavigate();
+
+  const handleNavigation = (path: string) => {
+    navigate(path);
+  };
+
   const [user, setUser] = useState<User | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -342,6 +350,9 @@ const Profile: React.FC = () => {
               <div className="flex items-center mt-1 space-x-2">
                 <span className="text-xs px-2 py-1 bg-slate-800 rounded-full text-slate-300">
                   Member since {new Date(user.created_at).toLocaleDateString()}
+                </span>
+                <span className="text-xs px-2 py-1 bg-slate-800 rounded-full text-slate-300">
+                  {user.role.toUpperCase()}
                 </span>
                 {user.subscription_plan && (
                   <span className="text-xs px-2 py-1 bg-blue-900/30 rounded-full text-blue-400">
@@ -940,7 +951,8 @@ const Profile: React.FC = () => {
                 <div className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800">
                   <h3 className="text-xl font-semibold mb-6">Help & Support</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
+
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/second-docs")}>
                       <div className="flex items-center mb-3">
                         <div className="p-2 bg-blue-900/30 rounded-lg mr-3">
                           <FiHelpCircle className="text-blue-400" size={20} />
@@ -951,7 +963,8 @@ const Profile: React.FC = () => {
                         Find answers to common questions about using our platform and services.
                       </p>
                     </div>
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
+
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/support")}>
                       <div className="flex items-center mb-3">
                         <div className="p-2 bg-purple-900/30 rounded-lg mr-3">
                           <FiMail className="text-purple-400" size={20} />
@@ -962,18 +975,8 @@ const Profile: React.FC = () => {
                         Reach out to our support team for personalized assistance with any issues.
                       </p>
                     </div>
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
-                      <div className="flex items-center mb-3">
-                        <div className="p-2 bg-green-900/30 rounded-lg mr-3">
-                          <FiBarChart2 className="text-green-400" size={20} />
-                        </div>
-                        <h4 className="font-medium">Guides & Tutorials</h4>
-                      </div>
-                      <p className="text-sm text-slate-400">
-                        Learn how to make the most of our platform with step-by-step guides.
-                      </p>
-                    </div>
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
+
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/forum")}>
                       <div className="flex items-center mb-3">
                         <div className="p-2 bg-yellow-900/30 rounded-lg mr-3">
                           <FiUser className="text-yellow-400" size={20} />
@@ -984,6 +987,19 @@ const Profile: React.FC = () => {
                         Connect with other users to share experiences and get advice.
                       </p>
                     </div>
+
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/second-docs")}>
+                      <div className="flex items-center mb-3">
+                        <div className="p-2 bg-green-900/30 rounded-lg mr-3">
+                          <FiBarChart2 className="text-green-400" size={20} />
+                        </div>
+                        <h4 className="font-medium">Guides & Tutorials</h4>
+                      </div>
+                      <p className="text-sm text-slate-400">
+                        Learn how to make the most of our platform with step-by-step guides.
+                      </p>
+                    </div>
+
                   </div>
                 </div>
 

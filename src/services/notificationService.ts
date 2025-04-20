@@ -6,7 +6,7 @@ import {
 
 export const getNotifications = async (limit = 10) => {
   const response = await api.get<Notification[]>('/notifications', {
-    params: {limit }
+    params: {limit}
   });
   console.log(response.data)
   return response.data;
