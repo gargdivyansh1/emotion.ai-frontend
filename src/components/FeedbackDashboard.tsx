@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "react-toastify";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -11,6 +12,7 @@ const axiosInstance = axios.create({
 });
 
 const FeedbackDashboard = () => {
+    const [role, setRole] = useState("USER");
     const [tab, setTab] = useState("submit");
     const [feedbackType, setFeedbackType] = useState("bug");
     const [message, setMessage] = useState("");
@@ -21,6 +23,48 @@ const FeedbackDashboard = () => {
     const [allFeedback, setAllFeedback] = useState([]);
     const [adminTypeFilter, setAdminTypeFilter] = useState("");
     const [adminSort, setAdminSort] = useState("date");
+
+    const fetchProfile = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const res = await axios.get(`${API_BASE_URL}/auth/me`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            setRole(res.data.role)
+            console.log(res.data.role)
+        } catch (err) {
+            console.error("Error fetching profile:", err);
+            toast.error("Failed to load profile data");
+        }
+    };
+
+    const fetchAdminFeedback = () => {
+        axiosInstance
+            .get("/feedback/", {
+                params: {
+                    feedback_type: adminTypeFilter || undefined,
+                    sort_by: adminSort,
+                    limit: 50,
+                },
+            })
+            .then((res) => setAllFeedback(res.data))
+            .catch((err) => console.error("Admin feedback fetch error:", err.response?.data || err.message));
+    };
+
+    const deleteAdminFeedback = async (id: number) => {
+        try {
+            await axiosInstance.delete(`/feedback/delete-feedback-admin/${id}`);
+            fetchAdminFeedback();
+        } catch (err: any) {
+            console.error("Delete admin feedback error:", err.response?.data || err.message);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfile();
+    },[])
 
     useEffect(() => {
         if (tab === "my") {
@@ -33,22 +77,9 @@ const FeedbackDashboard = () => {
         }
     }, [tab, adminTypeFilter, adminSort]);
 
-    const fetchAdminFeedback = () => {
-        axiosInstance
-            .get("/feedback", {
-                params: {
-                    feedback_type: adminTypeFilter || undefined,
-                    sort_by: adminSort,
-                    limit: 50,
-                },
-            })
-            .then((res) => setAllFeedback(res.data))
-            .catch((err) => console.error("Admin feedback fetch error:", err.response?.data || err.message));
-    };
-
     const submitFeedback = async () => {
         try {
-            await axiosInstance.post("/feedback", {
+            await axiosInstance.post("/feedback/", {
                 feedback_type: feedbackType,
                 message,
                 rating,
@@ -57,8 +88,10 @@ const FeedbackDashboard = () => {
             setMessage("");
             setRating(null);
             setTimeout(() => setSuccess(""), 3000);
+            toast.success("Feedback submitted successfully!")
         } catch (err: any) {
             console.error("Submit feedback error:", err.response?.data || err.message);
+            console.log(err)
         }
     };
 
@@ -68,15 +101,6 @@ const FeedbackDashboard = () => {
             setUserFeedback(userFeedback.filter((f: any) => f.id !== id));
         } catch (err: any) {
             console.error("Delete user feedback error:", err.response?.data || err.message);
-        }
-    };
-
-    const deleteAdminFeedback = async (id: number) => {
-        try {
-            await axiosInstance.delete(`/feedback/delete-feedback-admin/${id}`);
-            fetchAdminFeedback();
-        } catch (err: any) {
-            console.error("Delete admin feedback error:", err.response?.data || err.message);
         }
     };
 
@@ -105,12 +129,12 @@ const FeedbackDashboard = () => {
                 >
                     My Feedback
                 </button>
-                <button
+                {role === 'admin' && <button
                     onClick={() => setTab("admin")}
                     className={`px-4 py-2 rounded-lg transition-all ${tab === "admin" ? "bg-indigo-900/80 border border-indigo-700 text-indigo-200" : "bg-[#111111] hover:bg-[#1a1a1a] border border-[#222222] text-gray-300"}`}
                 >
-                    Admin View
-                </button>
+                    Admin
+                </button>}
             </div>
 
             {/* Submit Feedback Tab */}
