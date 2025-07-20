@@ -22,7 +22,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // Types for better type safety
 type User = {
-  id: string;
+  id: string; 
   username: string;
   email: string;
   created_at: string;
@@ -85,13 +85,13 @@ const Profile: React.FC = () => {
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem("token");
-      console.log(token)
+      //console.log(token)
       const res = await axios.get(`${API_BASE_URL}/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      console.log(res)
+      //console.log(res)
       setUser(res.data);
       setFormData({
         username: res.data.username,
