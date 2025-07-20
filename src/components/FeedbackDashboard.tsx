@@ -53,6 +53,8 @@ const FeedbackDashboard = () => {
             .catch((err) => console.error("Admin feedback fetch error:", err.response?.data || err.message));
     };
 
+    console.log(allFeedback)
+
     const deleteAdminFeedback = async (id: number) => {
         try {
             await axiosInstance.delete(`/feedback/delete-feedback-admin/${id}`);
