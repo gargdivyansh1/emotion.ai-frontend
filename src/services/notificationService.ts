@@ -5,20 +5,38 @@ import {
   NotificationForAll } from '../types'
 
 export const getNotifications = async (limit = 10) => {
-  const response = await api.get<Notification[]>('/notifications', {
-    params: {limit}
+  const token = localStorage.getItem('token'); 
+
+  const response = await api.get<Notification[]>('/notifications/', {
+    params: { limit },
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
   });
-  console.log(response.data)
+
+  console.log(response.data);
   return response.data;
 };
 
 export const getNotification = async (id: number) => {
-  const response = await api.get<Notification>(`/notifications${id}`);
+  const token = localStorage.getItem('token');
+
+  const response = await api.get<Notification>(`/notifications/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
   return response.data;
 };
 
 export const markAsRead = async (id: number) => {
-  const response = await api.put<Notification>(`/notifications/${id}/read`);
+
+  const token = localStorage.getItem('token');
+
+  const response = await api.put<Notification>(`/notifications/${id}/read`, {
+
+  });
   return response.data;
 };
 
@@ -35,19 +53,37 @@ export const clearAllNotifications = async (
 
 // Admin endpoints
 export const getAdminNotifications = async (skip = 0, limit = 20) => {
+  const token = localStorage.getItem('token');
+
   const response = await api.get<Notification[]>('/notifications/admin/get-all', {
-    params: { skip, limit }
+    params: { skip, limit },
+    headers: {
+      Authorization: `Bearer ${token}` 
+    }
   });
+
+  return response.data;
+};
+
+export const sendToAll = async (data: NotificationForAll) => {
+  const token = localStorage.getItem('token');
+
+  const response = await api.post(
+    '/notifications/admin/broadcast',
+    data,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  console.log(data)
   return response.data;
 };
 
 export const sendToUser = async (data: NotificationCreate) => {
   const response = await api.post<Notification>('/notifications/send-notification-to-user', data);
-  return response.data;
-};
-
-export const sendToAll = async (data: NotificationForAll) => {
-  const response = await api.post('/notifications/send-notification-to-all-users', data);
   return response.data;
 };
 
