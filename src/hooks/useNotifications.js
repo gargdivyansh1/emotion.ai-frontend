@@ -15,8 +15,6 @@ export const useNotifications = (userId) => {
       const offset = (pagination.page - 1) * pagination.limit;
       const data = await getNotifications(offset, pagination.limit);
       setNotifications(data);
-      // If your backend returns total count (recommended)
-      // setPagination(prev => ({...prev, total: data.total}));
     } finally {
       setLoading(false);
     }
