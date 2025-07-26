@@ -53,14 +53,12 @@ const History: React.FC = () => {
           const day = new Date(trend.period_start).getDate();
           const summary = trend.emotion_summary || {};
 
-          // Determine dominant emotion
           let dominant = { emotion: "neutral", count: 0 };
           for (const [emotion, detail]: any of Object.entries(summary)) {
             const count = typeof detail === "number" ? detail : detail?.count || 0;
             if (count > dominant.count) dominant = { emotion, count };
           }
 
-          // Assign latest dominant emotion for that day
           if (
             !dayDominantEmotion[day] ||
             new Date(trend.period_start) > new Date(dayDominantEmotion[day].timestamp)
@@ -71,13 +69,11 @@ const History: React.FC = () => {
             };
           }
 
-          // Chart totals
           Object.entries(summary).forEach(([emotion, detail]: any) => {
             emotionTotals[emotion] = (emotionTotals[emotion] || 0) + detail.count;
           });
         });
 
-        // Set color per day
         const updatedColors: { [day: number]: string } = {};
         for (let day = 1; day <= 30; day++) {
           const mood = dayDominantEmotion[day]?.emotion || "neutral";
@@ -124,14 +120,11 @@ const History: React.FC = () => {
         animate={{ opacity: 1, y: 0 }} 
         className="max-w-7xl mx-auto space-y-6 md:space-y-8"
       >
-        {/* Header */}
         <div className="flex flex-col sm:flex-row border border-gray-800 items-center justify-between bg-[#0a0a0a] p-4 md:p-6 rounded-xl shadow-lg">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 sm:mb-0">Emotion History</h2>
         </div>
 
-        {/* Top Section - Calendar and Chart */}
         <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
-          {/* Mood Calendar */}
           <motion.div 
             initial={{ opacity: 0, x: -20 }} 
             animate={{ opacity: 1, x: 0 }} 
@@ -170,7 +163,6 @@ const History: React.FC = () => {
             </div>
           </motion.div>
 
-          {/* Pie Chart */}
           <motion.div 
             initial={{ opacity: 0, x: 20 }} 
             animate={{ opacity: 1, x: 0 }} 
@@ -219,7 +211,6 @@ const History: React.FC = () => {
           </motion.div>
         </div>
 
-        {/* Trend Detail Modal */}
         {selectedTrend && (
           <div className="fixed inset-0 z-50 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-2 md:p-4">
             <motion.div
@@ -228,7 +219,6 @@ const History: React.FC = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-gradient-to-b from-[#111] to-[#1a1a1a] p-4 md:p-6 rounded-xl border border-gray-800 shadow-2xl w-full max-w-md md:max-w-2xl lg:max-w-3xl relative max-h-[90vh] overflow-y-auto"
             >
-              {/* Close Button */}
               <button
                 onClick={() => setSelectedTrend(null)}
                 className="absolute top-2 right-2 md:top-4 md:right-4 text-gray-400 hover:text-white text-xl"
@@ -236,7 +226,6 @@ const History: React.FC = () => {
                 &times;
               </button>
 
-              {/* Header */}
               <h3 className="text-xl md:text-2xl font-semibold text-white mb-1 flex items-center gap-2">
                 📊 Emotion Trend Detail
               </h3>
@@ -244,7 +233,6 @@ const History: React.FC = () => {
                 Detailed summary of your monitored emotional state.
               </p>
 
-              {/* Info Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-6 text-xs md:text-sm text-gray-300">
                 <div>
                   <span className="font-medium text-white">Session ID:</span> {selectedTrend.session_id}
@@ -263,7 +251,6 @@ const History: React.FC = () => {
                 </div>
               </div>
 
-              {/* Emotion Summary */}
               <div>
                 <h4 className="text-base md:text-lg font-semibold text-white mb-2 md:mb-3">Emotion Summary</h4>
 
@@ -309,7 +296,6 @@ const History: React.FC = () => {
           </div>
         )}
 
-        {/* Trends List */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }} 
           animate={{ opacity: 1, y: 0 }} 
@@ -357,7 +343,6 @@ const History: React.FC = () => {
             })}
           </div>
 
-          {/* Pagination */}
           <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-2">
             <button
               onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
