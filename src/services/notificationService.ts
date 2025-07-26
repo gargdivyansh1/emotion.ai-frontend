@@ -4,6 +4,7 @@ import {
   NotificationCreate, 
   NotificationForAll } from '../types'
 
+// correct --
 export const getNotifications = async (limit = 10) => {
   const token = localStorage.getItem('token'); 
 
@@ -14,10 +15,10 @@ export const getNotifications = async (limit = 10) => {
     }
   });
 
-  console.log(response.data);
   return response.data;
 };
 
+// correct 
 export const getNotification = async (id: number) => {
   const token = localStorage.getItem('token');
 
@@ -30,25 +31,46 @@ export const getNotification = async (id: number) => {
   return response.data;
 };
 
-export const markAsRead = async (id: number) => {
-
+// correct
+export const markAsRead = async (id: number): Promise<Notification> => {
   const token = localStorage.getItem('token');
-
-  const response = await api.put<Notification>(`/notifications/${id}/read`, {
-
-  });
+  
+  const response = await api.put<Notification>(
+    `/notifications/${id}/read`, 
+    {}, 
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+  
   return response.data;
 };
 
-export const deleteNotification = async (id: number) => {
-  await api.delete(`/notifications/${id}/delete`);
+// correct 
+export const deleteNotification = async (id: number): Promise<void> => {
+  const token = localStorage.getItem('token');
+  
+  await api.delete(`/notifications/${id}/delete`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    }
+  });
 };
 
-export const clearAllNotifications = async (
-  isAdmin: boolean,
-  userId: Number
-) => {
-  await api.delete('/notifications/clear-all-notifications-user');
+// correct --
+export const clearAllNotifications = async () => {
+  const token = localStorage.getItem('token');
+  
+  const response = await api.delete('/notifications/clear', {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    }
+  });
+  
+  return response.data;
 };
 
 // Admin endpoints
@@ -65,21 +87,35 @@ export const getAdminNotifications = async (skip = 0, limit = 20) => {
   return response.data;
 };
 
-export const sendToAll = async (data: NotificationForAll) => {
-  const token = localStorage.getItem('token');
-
-  const response = await api.post(
-    '/notifications/admin/broadcast',
-    data,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+// correct --
+export const sendToAll = async (data: NotificationForAll): Promise<{ message: string }> => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication token not found');
     }
-  );
 
-  console.log(data)
-  return response.data;
+    const response = await api.post<{ message: string }>(
+      '/notifications/admin/broadcast',
+      {
+        title: data.title,
+        message: data.message,
+        notification_type: data.notification_type,
+        status: data.status 
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error sending notification to all users:', error);
+    throw error;
+  }
 };
 
 export const sendToUser = async (data: NotificationCreate) => {
