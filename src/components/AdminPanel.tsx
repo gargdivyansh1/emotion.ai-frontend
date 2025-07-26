@@ -1,30 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Notification } from '../types';
-import { getAdminNotifications, sendToAll, deleteAdminNotification } from '../services/notificationService';
+import { useState} from 'react';
+import { sendToAll} from '../services/notificationService';
 import { NotificationType, NotificationStatus } from '../api';
 
 export const AdminPanel = () => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     message: '',
     notification_type: NotificationType.INFORMATIVE,
     status: NotificationStatus.PENDING
   });
-
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      const data = await getAdminNotifications();
-      setNotifications(data);
-    } catch (err) {
-      setError('Failed to fetch notifications');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSendToAll = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,25 +21,13 @@ export const AdminPanel = () => {
         notification_type: NotificationType.INFORMATIVE,
         status: NotificationStatus.PENDING
       });
-      fetchNotifications();
     } catch (err) {
       alert('Failed to send notification');
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this notification?')) {
-      await deleteAdminNotification(id);
-      fetchNotifications();
-    }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
   return (
-    <div className="space-y-6 bg-black min-h-screen p-6 text-white">
+    <div className="space-y-6 bg-black p-6 text-white">
       <div className="bg-gray-900 rounded-lg shadow overflow-hidden">
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-lg font-semibold">Send Notification to All Users</h2>
@@ -114,41 +86,6 @@ export const AdminPanel = () => {
             Send to All Users
           </button>
         </form>
-      </div>
-
-      <div className="bg-gray-900 rounded-lg shadow overflow-hidden">
-        <div className="p-4 border-b border-gray-700">
-          <h2 className="text-lg font-semibold">Recent Notifications</h2>
-        </div>
-        {loading ? (
-          <div className="p-4 text-gray-400">Loading...</div>
-        ) : error ? (
-          <div className="p-4 text-red-400">{error}</div>
-        ) : notifications.length === 0 ? (
-          <div className="p-4 text-gray-500">No notifications found</div>
-        ) : (
-          <div className="divide-y divide-gray-700">
-            {notifications.map(notification => (
-              <div key={notification.id} className="p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium">{notification.title}</h3>
-                    <p className="text-sm text-gray-300">{notification.message}</p>
-                    <div className="mt-1 text-xs text-gray-500">
-                      {new Date(notification.sent_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(notification.id)}
-                    className="text-gray-400 hover:text-red-500"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
