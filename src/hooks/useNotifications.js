@@ -1,4 +1,3 @@
-// hooks/useNotifications.js
 import { useState, useEffect } from 'react';
 
 export const useNotifications = (userId) => {
