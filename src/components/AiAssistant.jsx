@@ -49,7 +49,7 @@ const FullPageEmotionAIChatbot = () => {
   };
 
   const generateGeminiResponse = async (userMessage, detectedEmotion) => {
-    const API_KEY = 'AIzaSyBwqgQer7NvDHzS8ye4LkTlFVKWmaz_sL0';
+    const API_KEY = import.meta.env.API_KEY;
     const prompt = `You are an empathetic AI therapist specializing in emotional support and mental well-being. 
     The user is feeling ${detectedEmotion} and shared: "${userMessage}".
 
