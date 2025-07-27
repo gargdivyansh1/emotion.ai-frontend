@@ -8,7 +8,6 @@ const Privacy: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black text-white">
-      {/* Header */}
       <header className="max-w-6xl mx-auto px-4 py-8">
         <button 
           onClick={() => navigate('/')}
@@ -18,7 +17,6 @@ const Privacy: React.FC = () => {
         </button>
       </header>
 
-      {/* Main Content */}
       <section className="max-w-4xl mx-auto px-4 py-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -144,6 +142,12 @@ const Privacy: React.FC = () => {
           </motion.section>
         </div>
       </section>
+
+      <footer className="bg-gray-900 border-t border-gray-800 py-8">
+        <div className="max-w-6xl mx-auto px-4 text-center text-gray-400 text-sm">
+          <p>© {new Date().getFullYear()} EmotionAI Inc. All rights reserved.</p>
+        </div>
+      </footer>
     </div>
   );
 };
