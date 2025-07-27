@@ -51,7 +51,6 @@ const About: React.FC = () => {
         </motion.p>
       </section>
 
-      {/* Stats */}
       <section className="bg-gray-800 py-12">
         <div className="max-w-6xl mx-auto px-4">
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8">
@@ -103,7 +102,7 @@ const About: React.FC = () => {
             className="bg-gray-800 rounded-xl h-80"
           >
             <div className="h-full flex items-center justify-center text-gray-500">
-              <img src="src\pages\black.jpg" alt="" />
+              <img src="src\utils\images\black.jpg" alt="" />
             </div>
           </motion.div>
         </div>
