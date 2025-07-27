@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { LifeBuoy, Mail, MessageSquare, FileText, Phone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -6,8 +6,37 @@ import { useNavigate } from 'react-router-dom';
 const Support: React.FC = () => {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const loadTawkTo = () => {
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://embed.tawk.to/6885dcbb8bbc5d1928eb4a77/1j15ecg35';
+      script.charset = 'UTF-8';
+      script.setAttribute('crossorigin', '*');
+      document.body.appendChild(script);
+      
+      return script;
+    };
+
+    const script = loadTawkTo();
+
+    return () => {
+      if (script && script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, []);
+
   const handleNavigation = (path: string) => {
     navigate(path);
+  };
+
+  const startChat = () => {
+    if (window.Tawk_API) {
+      window.Tawk_API.toggle();
+    } else {
+      alert('Chat is loading, please try again in a moment');
+    }
   };
 
   const supportOptions = [
@@ -15,29 +44,33 @@ const Support: React.FC = () => {
       icon: MessageSquare,
       title: 'Live Chat',
       description: 'Chat with our support team in real-time',
-      available: 'Will available in some time',
-      action: 'Start Chat'
+      available: 'Available now',
+      action: 'Start Chat',
+      onClick: startChat
     },
     {
       icon: Mail,
       title: 'Email Support',
       description: 'Send us an email and we\'ll respond within 24 hours',
       available: 'Typically responds in 4 hours',
-      action: 'Contact Us'
+      action: 'Contact Us',
+      onClick: () => window.location.href = 'mailto:divyanshgarg515@gmail.com?subject=EmotionAI Support Request'
     },
     {
       icon: FileText,
       title: 'Help Center',
       description: 'Browse our documentation and FAQs',
       available: 'Always available',
-      action: 'View Docs'
+      action: 'View Docs',
+      onClick: () => navigate('/docs')
     },
     {
       icon: Phone,
       title: 'Phone Support',
       description: 'Call us for immediate assistance',
-      available: 'Will available in some time',
-      action: 'Call Now'
+      available: 'Mon-Fri, 9AM-5PM',
+      action: 'Call Now',
+      onClick: () => window.location.href = 'tel:+917617449174'
     }
   ];
 
@@ -69,7 +102,7 @@ const Support: React.FC = () => {
       <header className="max-w-6xl mx-auto px-4 py-8">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center space-x-2 text-indigo-400"
+          className="flex items-center space-x-2 text-indigo-400 hover:text-indigo-300 transition-colors"
         >
           <span className="text-xl font-bold">← Back to Home</span>
         </button>
@@ -105,7 +138,10 @@ const Support: React.FC = () => {
               <h2 className="text-xl font-bold text-white mb-2">{option.title}</h2>
               <p className="text-gray-400 mb-4">{option.description}</p>
               <p className="text-sm text-gray-500 mb-4">{option.available}</p>
-              <button className="text-indigo-400 font-medium flex items-center" onClick={() => handleNavigation("/documentation")}>
+              <button 
+                className="text-indigo-400 hover:text-indigo-300 font-medium flex items-center transition-colors"
+                onClick={option.onClick}
+              >
                 {option.action} →
               </button>
             </motion.div>
@@ -128,7 +164,45 @@ const Support: React.FC = () => {
             ))}
           </div>
         </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="mt-12 bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-xl p-8 border border-indigo-500/30"
+        >
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="mb-6 md:mb-0">
+              <h3 className="text-2xl font-bold text-white mb-2">Still Need Help?</h3>
+              <p className="text-indigo-200">Contact us directly through these channels</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button 
+                onClick={startChat}
+                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium text-center transition-colors"
+              >
+                Live Chat Now
+              </button>
+              <a 
+                href="mailto:divyanshgarg515@gmail.com?subject=EmotionAI Support Request" 
+                className="px-6 py-3 border border-indigo-400 hover:bg-indigo-900/30 rounded-lg font-medium text-center transition-colors"
+              >
+                Email Support
+              </a>
+            </div>
+          </div>
+        </motion.div>
       </section>
+
+      <div className="md:hidden fixed bottom-6 right-6 z-50">
+        <button
+          onClick={startChat}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg transition-colors"
+          aria-label="Open chat"
+        >
+          <MessageSquare className="w-6 h-6" />
+        </button>
+      </div>
     </div>
   );
 };
