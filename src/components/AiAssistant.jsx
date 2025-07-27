@@ -23,6 +23,7 @@ const FullPageEmotionAIChatbot = () => {
     fearful: { icon: '😨', description: 'Anxious, worried' },
   };
 
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -49,7 +50,7 @@ const FullPageEmotionAIChatbot = () => {
   };
 
   const generateGeminiResponse = async (userMessage, detectedEmotion) => {
-    const API_KEY = import.meta.env.API_KEY;
+    const API_key = import.meta.env.VITE_API_KEY;
     const prompt = `You are an empathetic AI therapist specializing in emotional support and mental well-being. 
     The user is feeling ${detectedEmotion} and shared: "${userMessage}".
 
@@ -63,7 +64,7 @@ const FullPageEmotionAIChatbot = () => {
     Aim for 4-6 thoughtful sentences that create a supportive, non-judgmental space. Maintain a warm, professional tone that balances empathy with helpful suggestions.`;
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_key}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
