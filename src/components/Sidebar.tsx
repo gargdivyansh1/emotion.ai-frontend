@@ -5,16 +5,14 @@ import {
   Activity,
   User,
   History,
-  Settings,
   Brain,
   BarChart2,
-  TrendingUp,
   CreditCard,
   Box,
   Menu,
   X,
-  Lightbulb,
-  Bell
+  Bell,
+  Airplay
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,7 +31,7 @@ const Sidebar = () => {
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Initialize the state
+    handleResize(); 
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -49,13 +47,12 @@ const Sidebar = () => {
     { icon: User, label: 'Profile', path: '/profile', description: 'Manage your account' },
     { icon: Box, label: 'Feedbacks', path: '/feedback-dashboard', description: 'Let us know what you feel' },
     { icon: Bell, label: 'Notifications', path: '/notifications', description: 'You got something !!' },
-    { icon: TrendingUp, label: 'Progress', path: '/progress', description: 'Track your emotional growth' },
+    { icon: Airplay, label: 'AI Assistant', path: '/assistant', description: 'Let the AI resolve your doubts' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing', description: 'Upgrade your plan' },
   ];
 
   return (
     <>
-      {/* Mobile menu button */}
       {isMobile && (
         <button
           onClick={toggleSidebar}
@@ -141,7 +138,6 @@ const Sidebar = () => {
         )}
       </AnimatePresence>
 
-      {/* Overlay for mobile */}
       {isMobile && isOpen && (
         <motion.div
           initial={{ opacity: 0 }}
