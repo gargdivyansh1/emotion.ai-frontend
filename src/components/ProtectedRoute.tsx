@@ -1,22 +1,24 @@
 import { useAuth } from '../context/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
+import { PUBLIC_ROUTES } from '../utils/constants';
 
-interface ProtectedRouteProps {
+interface PrivateRouteProps {
   children: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+const PrivateRoute = ({ children }: PrivateRouteProps) => {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div className="text-white">Loading...</div>;
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
+  if (!user && !PUBLIC_ROUTES.includes(location.pathname)) {
+    return <Navigate to="/authPage" replace state={{ from: location }} />;
   }
 
   return <>{children}</>;
 };
 
-export default ProtectedRoute;
+export default PrivateRoute;
