@@ -70,7 +70,7 @@ export interface Notification {
   notification_type: NotificationType;
   status: NotificationStatus;
   is_read: boolean;
-  sent_at: string;
+  sent_at: Date;
 }
 
 export interface NotificationCreate {
