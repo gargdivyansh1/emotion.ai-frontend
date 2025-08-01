@@ -149,11 +149,12 @@ export const NotificationList = ({ isAdmin }: NotificationListProps) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { user } = useAuth();
+  const [markRead, setMarkRead] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
-  }, [markAsRead, deleteNotification, NotificationItem]);
-  
+  }, [markAsRead, markRead, setMarkRead, deleteNotification, NotificationItem]);
+
   const fetchNotifications = async () => {
     try {
       setLoading(true);
@@ -179,6 +180,7 @@ export const NotificationList = ({ isAdmin }: NotificationListProps) => {
   const handleMarkAsRead = async (id: number) => {
     try {
       await markAsRead(id);
+      setMarkRead(true);
       setNotifications(notifications.map(n =>
         n.id === id ? { ...n, status: NotificationStatus.READ } : n
       ));
