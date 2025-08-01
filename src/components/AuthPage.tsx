@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -16,6 +16,9 @@ const AuthPage: React.FC = () => {
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState(0);
+    const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+    const [otp, setOtp] = useState("");
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -85,13 +88,12 @@ const AuthPage: React.FC = () => {
                     headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 });
 
-                localStorage.setItem("token", res.data.access_token);
-                localStorage.setItem("user_role", res.data.role);
-                localStorage.setItem("user_id", res.data.user_id);
-                localStorage.setItem("is_verified", res.data.is_verified);
-
-                toast.success("Login successful!");
-                navigate("/dashboard");
+                if (res.data.two_factor_required) {
+                    setTwoFactorRequired(true);
+                    await sendOtp(email);
+                } else {
+                    completeLogin(res.data);
+                }
             } else {
                 await axios.post(`${API_BASE_URL}/auth/register`, {
                     username,
@@ -115,6 +117,64 @@ const AuthPage: React.FC = () => {
         }
     };
 
+    const sendOtp = async (email: string) => {
+        setIsSendingOtp(true);
+        try {
+            await axios.post(`${API_BASE_URL}/api/send_otp`, { email });
+            toast.success("OTP sent to your email");
+        } catch (err: any) {
+            console.error("OTP send error:", err);
+            setError("Failed to send OTP. Please try again.");
+            toast.error("Failed to send OTP");
+            setTwoFactorRequired(false);
+        } finally {
+            setIsSendingOtp(false);
+        }
+    };
+
+    const verifyOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            await axios.post(`${API_BASE_URL}/api/verify_otp`, {
+                email,
+                otp,
+                enable: true 
+            });
+
+            const formData = new URLSearchParams();
+            formData.append("email", email);
+            formData.append("password", password);
+            formData.append('otp', otp);
+
+            console.log(formData)
+
+            const res = await axios.post(`${API_BASE_URL}/auth/complete-login`, formData, {
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            });
+
+            completeLogin(res.data);
+        } catch (err: any) {
+            console.error("OTP verification error:", err);
+            const errorMessage = err.response?.data?.detail ||
+                "Invalid OTP. Please try again.";
+            setError(errorMessage);
+            toast.error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const completeLogin = (data: any) => {
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("user_role", data.role);
+        localStorage.setItem("user_id", data.user_id);
+        localStorage.setItem("is_verified", data.is_verified);
+
+        toast.success("Login successful!");
+        navigate("/dashboard");
+    };
+
     const getPasswordStrengthColor = () => {
         if (passwordStrength === 0) return "bg-gray-700";
         if (passwordStrength <= 2) return "bg-red-600";
@@ -122,11 +182,98 @@ const AuthPage: React.FC = () => {
         return "bg-green-500";
     };
 
+    if (twoFactorRequired) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-black p-4">
+                <div className="absolute inset-0 z-0">
+                    <img 
+                        src="src/utils/images/brain-2062057_1920.jpg" 
+                        alt="Background"
+                        className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/95"></div> 
+                </div>
+                <button
+                    onClick={() => setTwoFactorRequired(false)}
+                    className="absolute top-10 left-10 z-30 flex items-center gap-1 text-white hover:text-white"
+                    aria-label="Go back"
+                >
+                    <ArrowLeft size={18} />
+                    <span className="text-xl hidden sm:inline">Back</span>
+                </button>
+                <div className="relative w-full max-w-md bg-black border border-gray-800 p-8">
+                    <div className="text-center mb-6">
+                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-900/50 mb-4">
+                            <Mail className="h-5 w-5 text-indigo-400" />
+                        </div>
+                        <h2 className="text-2xl font-semibold text-white mb-2">
+                            Two-Factor Authentication
+                        </h2>
+                        <p className="text-gray-400">
+                            We've sent a verification code to your email
+                        </p>
+                        <p className="text-indigo-400 font-medium mt-1">{email}</p>
+                    </div>
+
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-900/30 border-l-4 border-red-600">
+                            <p className="text-red-400 text-sm">{error}</p>
+                        </div>
+                    )}
+
+                    <form onSubmit={verifyOtp} className="space-y-4">
+                        <div>
+                            <label htmlFor="otp" className="block text-sm font-medium text-gray-300 mb-1">
+                                Verification Code
+                            </label>
+                            <input
+                                id="otp"
+                                type="text"
+                                placeholder="Enter 6-digit code"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                required
+                                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-indigo-500"
+                                maxLength={6}
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 flex items-center justify-center gap-2 disabled:opacity-70"
+                        >
+                            {isLoading && <Loader2 size={18} className="animate-spin" />}
+                            Verify
+                        </button>
+                    </form>
+
+                    <div className="mt-4 text-center">
+                        <button
+                            onClick={() => sendOtp(email)}
+                            disabled={isSendingOtp}
+                            className="text-indigo-400 hover:underline text-sm font-medium flex items-center justify-center gap-1 mx-auto"
+                        >
+                            {isSendingOtp ? (
+                                <>
+                                    <Loader2 size={14} className="animate-spin" />
+                                    Sending...
+                                </>
+                            ) : (
+                                "Resend Code"
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-black p-4">
             <div className="absolute inset-0 z-0">
                 <img 
-                    src="src\utils\images\brain-2062057_1920.jpg" 
+                    src="src/utils/images/brain-2062057_1920.jpg" 
                     alt="Background"
                     className="w-full h-full object-cover"
                 />

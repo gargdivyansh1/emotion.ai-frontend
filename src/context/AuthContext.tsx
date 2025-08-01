@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { API_BASE_URL } from '../config';
 
 API_BASE_URL
@@ -27,7 +27,6 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Configure axios instance
 const authAxios = axios.create({
   baseURL: 'http://localhost:8000',
   withCredentials: true,
@@ -101,10 +100,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    // Add API call to invalidate token on server if needed
     localStorage.removeItem('token');
     setUser(null);
-    // Clear axios headers
     delete authAxios.defaults.headers.common['Authorization'];
   };
 
