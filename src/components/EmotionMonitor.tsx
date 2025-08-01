@@ -1,523 +1,775 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { Doughnut, Bar } from 'react-chartjs-2';
-import { useAuth } from '../context/AuthContext';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Button,
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  LinearProgress,
+  ThemeProvider,
+  createTheme,
+  CssBaseline,
+  useMediaQuery,
+  Grid,
+  Tooltip,
+} from '@mui/material';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Pause, PlayArrow, Stop, Info } from '@mui/icons-material';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+const blackTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#1e88e5',
+    },
+    secondary: {
+      main: '#7c4dff',
+    },
+    background: {
+      default: '#050505',
+      paper: '#0a0a0a',
+    },
+    text: {
+      primary: '#f5f5f5',
+      secondary: '#b0b0b0',
+    },
+    divider: 'rgba(255, 255, 255, 0.08)',
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#0a0a0a',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)',
+          },
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '12px',
+          textTransform: 'none',
+          fontWeight: 600,
+          padding: '10px 20px',
+          letterSpacing: '0.5px',
+          boxShadow: 'none',
+          '&:hover': {
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
+            transform: 'translateY(-1px)',
+          },
+        },
+      },
+    },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          height: 10,
+          borderRadius: 5,
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        },
+        bar: {
+          borderRadius: 5,
+          transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        },
+      },
+    },
+  },
+  typography: {
+    fontFamily: '"Inter", "Helvetica", "Arial", sans-serif',
+    h4: {
+      fontWeight: 700,
+      letterSpacing: '-0.5px',
+    },
+    h6: {
+      fontWeight: 600,
+    },
+    body1: {
+      fontWeight: 400,
+    },
+  },
+});
 
 type EmotionData = {
   emotion: string;
   confidence: number;
   timestamp: string;
+  [key: string]: any;
 };
 
-type SessionStats = {
-  [emotion: string]: number;
-};
+const VideoStreamer = () => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [emotionData, setEmotionData] = useState<EmotionData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fps, setFps] = useState(0);
+  const [frameCount, setFrameCount] = useState(0);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionTime, setSessionTime] = useState(0);
+  const [emotionHistory, setEmotionHistory] = useState<EmotionData[]>([]);
+  const animationRef = useRef<number | null>(null);
+  const lastFrameTimeRef = useRef(0);
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [sessionLimitReached, setSessionLimitReached] = useState(false);
 
-const EMOTION_COLORS: Record<string, string> = {
-  happy: '#10b981',
-  sad: '#3b82f6',
-  angry: '#ef4444',
-  surprise: '#f59e0b',
-  fear: '#8b5cf6',
-  disgust: '#10b981',
-  neutral: '#6b7280',
-  unknown: '#4b5563',
-  no_face: '#374151',
-};
 
-export default function EmotionDetector() {
-  const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [emotionData, setEmotionData] = useState<EmotionData | null>(null);
-  const [sessionStats, setSessionStats] = useState<SessionStats>({});
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionDuration, setSessionDuration] = useState(0);
+  const isMobile = useMediaQuery('(max-width:600px)');
+  const isTablet = useMediaQuery('(max-width:900px)');
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const animationRef = useRef<number | null>(null);
-  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Initialize emotion stats
-  const initStats = useCallback(() => {
-    const initialStats: SessionStats = {};
-    Object.keys(EMOTION_COLORS).forEach(emotion => {
-      initialStats[emotion] = 0;
-    });
-    setSessionStats(initialStats);
-  }, []);
-
-  // Start session timer
-  const startSessionTimer = useCallback(() => {
-    setSessionDuration(0);
-    sessionTimerRef.current = setInterval(() => {
-      setSessionDuration(prev => prev + 1);
-    }, 1000);
-  }, []);
-
-  // Stop session timer
-  const stopSessionTimer = useCallback(() => {
-    if (sessionTimerRef.current) {
-      clearInterval(sessionTimerRef.current);
-      sessionTimerRef.current = null;
-    }
-  }, []);
-
-  // Format session duration
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Save session data when session ends
-  const saveSessionData = async () => {
-    if (!sessionId || !user) return;
-
-    try {
-      await axios.post(
-        '/sessions/save',
-        {
-          session_id: sessionId,
-          duration: sessionDuration,
-          emotions: sessionStats,
-          user_id: user.id
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-    } catch (err) {
-      console.error('Failed to save session data:', err);
-    }
-  };
-
-  // Stop session and clean up resources
-  const stopSession = useCallback(async () => {
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = null;
-    }
-
-    if (wsRef.current) {
-      const validStates: Array<WebSocket['readyState']> = [WebSocket.OPEN, WebSocket.CONNECTING];
-      if (validStates.includes(wsRef.current.readyState)) {
-        wsRef.current.close();
-      }
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    stopSessionTimer();
-    await saveSessionData();
-
-    setIsConnected(false);
-    setIsLoading(false);
-  }, [sessionDuration, sessionId, sessionStats, user, stopSessionTimer]);
-
-  // Start emotion detection session
-  const startSession = useCallback(async () => {
-    if (!isAuthenticated || !user) {
-      navigate('/login');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    initStats();
-
-    try {
-      // Get camera access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        }
-      });
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await new Promise((resolve) => {
-          if (videoRef.current) {
-            videoRef.current.onloadedmetadata = resolve;
-          }
+  useEffect(() => {
+    const initVideo = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: isMobile ? 320 : isTablet ? 480 : 640 },
+            height: { ideal: isMobile ? 240 : isTablet ? 360 : 480 },
+            facingMode: 'user'
+          },
+          audio: false
         });
-      }
 
-      // Get token from auth context
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+
+        return () => {
+          if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+          }
+        };
+      } catch (err) {
+        setError(`Could not access camera: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    };
+
+    initVideo();
+  }, [isMobile, isTablet]);
+
+  useEffect(() => {
+    if (!isStreaming) return;
+
+    const connectWebSocket = () => {
+
       const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
 
-      // Connect to WebSocket
-      const wsUrl = `ws://localhost:8000/video/ws?token=${token}`;
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(`ws://localhost:8000/ws/video/?token=${token}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connection established');
-        setIsConnected(true);
-        setIsLoading(false);
+        console.log('WebSocket connected');
+        setError(null);
+        startFrameProcessing();
         startSessionTimer();
-        captureAndSendFrames();
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-
           if (data.status === 'connected') {
             setSessionId(data.session_id);
           } else if (data.emotion) {
-            setEmotionData(data);
-            updateStats(data.emotion);
-          } else if (data.error) {
-            setError(data.error);
-            if (data.error.includes('authentication')) {
-              logout();
-              navigate('/login');
-            }
+            const newEmotionData = {
+              ...data,
+              timestamp: new Date(data.timestamp).getTime()
+            };
+            setEmotionData(newEmotionData);
+            setEmotionHistory(prev => [...prev.slice(-29), newEmotionData]);
           }
         } catch (err) {
-          console.error('Error parsing message:', err);
+          console.error('Error parsing WebSocket message:', err);
         }
       };
 
       ws.onerror = () => {
-        setError('Connection error. Please refresh and try again.');
-        stopSession();
+        setError('WebSocket error occurred');
       };
 
       ws.onclose = () => {
-        stopSession();
+        console.log('WebSocket disconnected');
       };
 
-    } catch (err) {
-      console.error('Session error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start session');
-      await stopSession();
+      return () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
+    };
+  }, [isStreaming]);
+
+  const startSessionTimer = () => {
+    setSessionTime(0);
+    if (sessionTimerRef.current) {
+      clearInterval(sessionTimerRef.current);
     }
-  }, [isAuthenticated, user, navigate, initStats, startSessionTimer, stopSession, logout]);
 
-  // Capture and send video frames
-  const captureAndSendFrames = useCallback(() => {
-    if (!isConnected || !videoRef.current || !canvasRef.current || !wsRef.current) return;
+    sessionTimerRef.current = setInterval(() => {
+      setSessionTime(prev => {
+        if (prev >= 120) {
+          endSession();
+          return 120;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+  };
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+  const startFrameProcessing = () => {
+    lastFrameTimeRef.current = performance.now();
+    processFrame();
+  };
+
+  const processFrame = () => {
+    if (isPaused) {
+      animationRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    const now = performance.now();
+    const elapsed = now - lastFrameTimeRef.current;
+
+    if (elapsed >= 100) {
+      captureAndSendFrame();
+      lastFrameTimeRef.current = now;
+
+      setFrameCount(prev => {
+        const newCount = prev + 1;
+        setFps(Math.round((newCount / (now - startTimeRef.current)) * 1000));
+        return newCount;
+      });
+    }
+
+    animationRef.current = requestAnimationFrame(processFrame);
+  };
+
+  const startTimeRef = useRef(0);
+
+  const captureAndSendFrame = () => {
+    if (!videoRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
     const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    // Set canvas dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Draw frame
-    ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Send frame
     canvas.toBlob(
-      (blob) => blob && wsRef.current?.readyState === WebSocket.OPEN && wsRef.current.send(blob),
+      (blob) => {
+        if (!blob) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const arrayBuffer = reader.result;
+          if (wsRef.current?.readyState === WebSocket.OPEN && arrayBuffer instanceof ArrayBuffer) {
+            wsRef.current.send(arrayBuffer);
+          }
+        };
+        reader.readAsArrayBuffer(blob);
+      },
       'image/jpeg',
       0.7
     );
+  };
 
-    // Continue capturing
-    animationRef.current = requestAnimationFrame(captureAndSendFrames);
-  }, [isConnected]);
+  const startSession = async () => {
+    console.log('Button Clicked');
 
-  // Update emotion statistics
-  const updateStats = useCallback((emotion: string) => {
-    setSessionStats(prev => ({
-      ...prev,
-      [emotion]: (prev[emotion] || 0) + 1
-    }));
-  }, []);
+    try {
+      const token = localStorage.getItem('token');
 
-  // Generate data for doughnut chart
-  const getChartData = useCallback(() => {
-    const emotions = Object.keys(sessionStats)
-      .filter(emotion => sessionStats[emotion] > 0)
-      .sort((a, b) => sessionStats[b] - sessionStats[a]);
+      const response = await axios.post(
+        API_BASE_URL + "/users/increment-session",
+        null,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-    return {
-      labels: emotions,
-      datasets: [{
-        data: emotions.map(e => sessionStats[e]),
-        backgroundColor: emotions.map(e => EMOTION_COLORS[e]),
-        borderColor: '#1f2937',
-        borderWidth: 1,
-      }]
-    };
-  }, [sessionStats]);
+      if (response.data.message === "Session limit reached") {
+        setSessionLimitReached(true);
+        setTimeout(() => {
+          navigate("/pricing");
+        }, 2000);
+        return;
+      }
 
-  // Generate data for bar chart
-  const getBarChartData = useCallback(() => {
-    const emotions = Object.entries(sessionStats)
-      .filter(([_, count]) => count > 0)
-      .sort((a, b) => b[1] - a[1]);
+      setIsStreaming(true);
+      setIsPaused(false);
+      setEmotionHistory([]);
+      startTimeRef.current = performance.now();
 
-    return {
-      labels: emotions.map(([e]) => e.replace('_', ' ').toUpperCase()),
-      datasets: [{
-        label: 'Emotion Frequency',
-        data: emotions.map(([_, count]) => count),
-        backgroundColor: emotions.map(([e]) => EMOTION_COLORS[e]),
-        borderColor: '#1f2937',
-        borderWidth: 1,
-      }]
-    };
-  }, [sessionStats]);
-
-  // Get color for emotion display
-  const getEmotionColor = useCallback((emotion: string) => {
-    return EMOTION_COLORS[emotion.toLowerCase()] || '#6b7280';
-  }, []);
-
-  // Auto-start session when component mounts if authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      startSession();
+      console.log("Session started successfully");
+    } catch (error) {
+      console.error("Error starting session:", error);
     }
-    return () => {
-      stopSession();
-    };
-  }, [isAuthenticated, startSession, stopSession]);
+  };
+
+  const pauseSession = () => {
+    setIsPaused(!isPaused);
+  };
+
+  const endSession = () => {
+    setIsStreaming(false);
+    setIsPaused(false);
+    setFrameCount(0);
+    setFps(0);
+
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+
+    if (sessionTimerRef.current) {
+      clearInterval(sessionTimerRef.current);
+    }
+  };
+
+  const chartData = emotionHistory.map((data, index) => ({
+    time: index,
+    emotion: data.emotion,
+    confidence: data.confidence * 100,
+    ...Object.fromEntries(
+      Object.entries(data.emotion || {}).map(([key, value]) =>
+        [key, typeof value === 'number' ? value * 100 : value]
+      )
+    )
+  }));
+
+  const emotionColors: Record<string, string> = {
+    happy: '#4caf50',
+    sad: '#2196f3',
+    angry: '#f44336',
+    surprise: '#ff9800',
+    fear: '#9c27b0',
+    disgust: '#795548',
+    neutral: '#607d8b'
+  };
 
   return (
-    <div className="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-4 md:mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold">
-            Real-time Emotion Detection
-          </h1>
-          {user && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm md:text-base text-gray-400">
-                Logged in as: {user.username}
-              </span>
+    <div className='p-4 md:p-6 md:ml-64 min-h-screen bg-black text-white space-y-6 md:space-y-8'>
+      <ThemeProvider theme={blackTheme}>
+        <CssBaseline />
+        <Box sx={{
+          p: isMobile ? 2 : 3,
+          width: '100%',
+          minHeight: '100vh',
+          backgroundColor: '#050505',
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(30,30,30,0.2) 0%, rgba(5,5,5,1) 100%)',
+        }}>
+          <Box sx={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            justifyContent: 'space-between',
+            mb: 3,
+            gap: 2
+          }}>
+            <Typography variant={isMobile ? "h5" : "h4"} sx={{
+              fontWeight: 700,
+              color: 'white',
+              textShadow: '0 2px 10px rgba(30, 136, 229, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              Emotion Detection Dashboard
+              <Tooltip title="Real-time emotion analysis using facial recognition">
+                <Info color="primary" fontSize="small" />
+              </Tooltip>
+            </Typography>
+            <h2>After completing the session do refresh from the Insights section for immediately switch off the camera..</h2>
+
+          </Box>
+
+          {sessionLimitReached && (
+            <div className="fixed top-5 right-5 bg-red-600 text-white px-6 py-4 rounded-lg shadow-md z-50">
+              <strong>Session limit reached!</strong> Upgrade to a new plan to continue.
             </div>
           )}
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          {/* Video Feed Section */}
-          <div className="lg:col-span-2 space-y-3 md:space-y-4">
-            <div className="relative bg-gray-800 rounded-lg md:rounded-xl overflow-hidden aspect-video border border-gray-700">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              <canvas ref={canvasRef} className="hidden" />
+          {error && (
+            <Card sx={{
+              mb: 3,
+              backgroundColor: 'rgba(244, 67, 54, 0.1)',
+              border: '1px solid rgba(244, 67, 54, 0.3)',
+              p: 2
+            }}>
+              <CardContent>
+                <Typography color="error" variant="body1">
+                  Error: {error}
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
 
-              {!isConnected && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800/90">
-                  <div className="text-center p-4 md:p-6">
-                    <h2 className="text-lg md:text-xl font-semibold mb-2">
-                      {isAuthenticated ? 'Initializing...' : 'Authentication Required'}
-                    </h2>
-                    {!isAuthenticated && (
+          <Grid container spacing={isMobile ? 2 : 4}>
+            <Grid item xs={12} md={6}>
+              <Card sx={{
+                height: '100%',
+                background: 'linear-gradient(145deg, #141414ff, #000000ff)'
+              }}>
+                <CardContent sx={{ p: isMobile ? 2 : 3 }}>
+                  <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 2
+                  }}>
+                    <Typography variant="h6" sx={{
+                      color: '#f5f5f5',
+                      fontWeight: 600,
+                      letterSpacing: '0.3px'
+                    }}>
+                      Video Stream
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
+                        {isMobile ? `${fps} FPS` : `Frame Rate: ${fps} FPS`}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{
+                    position: 'relative',
+                    mb: 3,
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
+                    aspectRatio: '16/9'
+                  }}>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'block',
+                        backgroundColor: '#000',
+                        objectFit: 'cover'
+                      }}
+                    />
+                    <canvas ref={canvasRef} style={{ display: 'none' }} />
+                  </Box>
+
+                  <Box sx={{
+                    display: 'flex',
+                    gap: 2,
+                    mb: 2,
+                    flexDirection: isMobile ? 'column' : 'row'
+                  }}>
+                    {!isStreaming ? (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<PlayArrow />}
+                        onClick={startSession}
+                        fullWidth={isMobile}
+                        sx={{
+                          background: 'linear-gradient(45deg, #1e88e5, #1976d2)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #1976d2, #1565c0)'
+                          }
+                        }}
+                      >
+                        Start Session
+                      </Button>
+                    ) : (
                       <>
-                        <p className="text-gray-400 mb-4">
-                          Please login to use emotion detection
-                        </p>
-                        <button
-                          onClick={() => navigate('/login')}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
+                        <Button
+                          variant="contained"
+                          color={isPaused ? "success" : "secondary"}
+                          startIcon={isPaused ? <PlayArrow /> : <Pause />}
+                          onClick={pauseSession}
+                          sx={{
+                            flex: 1,
+                            background: isPaused
+                              ? 'linear-gradient(45deg, #388e3c, #2e7d32)'
+                              : 'linear-gradient(45deg, #7c4dff, #651fff)',
+                            '&:hover': {
+                              background: isPaused
+                                ? 'linear-gradient(45deg, #2e7d32, #1b5e20)'
+                                : 'linear-gradient(45deg, #651fff, #6200ea)'
+                            }
+                          }}
                         >
-                          Go to Login
-                        </button>
+                          {isPaused ? 'Resume' : 'Pause'}
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="error"
+                          startIcon={<Stop />}
+                          onClick={endSession}
+                          sx={{
+                            flex: 1,
+                            background: 'linear-gradient(45deg, #f44336, #e53935)',
+                            '&:hover': {
+                              background: 'linear-gradient(45deg, #e53935, #d32f2f)'
+                            }
+                          }}
+                        >
+                          End Session
+                        </Button>
                       </>
                     )}
-                    {isAuthenticated && isLoading && (
-                      <div className="flex justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                  </Box>
 
-              {emotionData && isConnected && (
-                <div
-                  className="absolute bottom-3 left-3 md:bottom-4 md:left-4 px-3 py-1 md:px-4 md:py-2 rounded-md md:rounded-lg backdrop-blur-sm border"
-                  style={{
-                    backgroundColor: `${getEmotionColor(emotionData.emotion)}20`,
-                    borderColor: getEmotionColor(emotionData.emotion)
-                  }}
-                >
-                  <div className="flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-lg font-semibold capitalize">
-                      {emotionData.emotion.replace('_', ' ')}
-                    </span>
-                    <span className="text-xs md:text-sm opacity-80">
-                      {Math.round(emotionData.confidence * 100)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center">
-              <div className="flex gap-3">
-                {!isConnected && isAuthenticated && !isLoading && (
-                  <button
-                    onClick={startSession}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium"
-                  >
-                    Start Session
-                  </button>
-                )}
-
-                {isConnected && (
-                  <button
-                    onClick={stopSession}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium"
-                  >
-                    Stop Session
-                  </button>
-                )}
-              </div>
-
-              {isConnected && (
-                <div className="text-sm md:text-base">
-                  <span className="text-gray-400">Duration:</span>{' '}
-                  <span className="font-mono">{formatDuration(sessionDuration)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Stats Section */}
-          <div className="space-y-4 md:space-y-6">
-            <div className="bg-gray-800 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-700">
-              <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">
-                Emotion Distribution
-              </h2>
-              <div className="h-48 md:h-64">
-                <Doughnut
-                  data={getChartData()}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'right',
-                        labels: {
-                          color: '#f3f4f6',
-                          font: {
-                            family: 'Inter',
-                            size: window.innerWidth < 768 ? 10 : 12
-                          }
-                        }
-                      },
-                      tooltip: {
-                        backgroundColor: '#111827',
-                        titleColor: '#f3f4f6',
-                        bodyColor: '#d1d5db',
+                  <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                    color: '#b0b0b0'
+                  }}>
+                    <Typography variant="body2">
+                      Session Time: {Math.floor(sessionTime / 60)}:{String(sessionTime % 60).padStart(2, '0')} / 2:00
+                    </Typography>
+                    <Typography variant="body2">
+                      Frames Processed: {frameCount}
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={(sessionTime / 120) * 100}
+                    sx={{
+                      '& .MuiLinearProgress-bar': {
+                        background: 'linear-gradient(90deg, #1e88e5, #64b5f6)'
                       }
-                    },
-                    cutout: '65%',
-                  }}
-                />
-              </div>
-            </div>
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
 
-            <div className="bg-gray-800 rounded-lg md:rounded-xl p-4 md:p-6 border border-gray-700">
-              <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">
-                Emotion Frequency
-              </h2>
-              <div className="h-48 md:h-64">
-                <Bar
-                  data={getBarChartData()}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        ticks: {
-                          color: '#9ca3af'
-                        },
-                        grid: {
-                          color: '#374151'
-                        }
-                      },
-                      x: {
-                        ticks: {
-                          color: '#9ca3af'
-                        },
-                        grid: {
-                          display: false
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <Grid item xs={12} md={6}>
+              <Card sx={{
+                height: '100%',
+                background: 'linear-gradient(145deg, #0f0e0eff, #010101)'
+              }}>
+                <CardContent sx={{ p: isMobile ? 2 : 3 }}>
+                  <Typography variant="h6" sx={{
+                    color: '#f5f5f5',
+                    fontWeight: 600,
+                    letterSpacing: '0.3px',
+                    mb: 2
+                  }}>
+                    Emotion Analysis
+                  </Typography>
 
-            {sessionId && (
-              <div className="bg-gray-800 rounded-lg md:rounded-xl p-4 border border-gray-700">
-                <h2 className="text-lg font-semibold mb-2">Session Info</h2>
-                <div className="text-sm space-y-2">
-                  <div>
-                    <p className="text-gray-400">Session ID:</p>
-                    <p className="font-mono text-gray-300 text-xs truncate">{sessionId}</p>
-                  </div>
-                  {user && (
-                    <div>
-                      <p className="text-gray-400">User ID:</p>
-                      <p className="font-mono text-gray-300">{user.id}</p>
-                    </div>
+                  {emotionData ? (
+                    <>
+                      <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 3,
+                        p: 2,
+                        background: '#111111',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                        flexDirection: isMobile ? 'column' : 'row',
+                        textAlign: isMobile ? 'center' : 'left',
+                        gap: 2
+                      }}>
+                        <Box sx={{
+                          width: 60,
+                          height: 60,
+                          borderRadius: '50%',
+                          backgroundColor: emotionColors[emotionData.emotion] || '#607d8b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontWeight: 'bold',
+                          fontSize: '1.2rem',
+                          boxShadow: `0 0 20px ${emotionColors[emotionData.emotion] || '#607d8b'}`,
+                          flexShrink: 0
+                        }}>
+                          {emotionData.emotion.charAt(0).toUpperCase()}
+                        </Box>
+                        <Box>
+                          <Typography variant="h5" sx={{
+                            fontWeight: 700,
+                            color: emotionColors[emotionData.emotion] || '#f5f5f5',
+                            lineHeight: 1.2
+                          }}>
+                            {emotionData.emotion.charAt(0).toUpperCase() + emotionData.emotion.slice(1)}
+                          </Typography>
+                          <Typography variant="body1" sx={{
+                            color: '#b0b0b0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            mt: 0.5
+                          }}>
+                            Confidence:
+                            <Box component="span" sx={{
+                              color: '#ffffff',
+                              fontWeight: 500,
+                              display: 'inline-flex',
+                              alignItems: 'center'
+                            }}>
+                              {(emotionData.confidence * 100).toFixed(1)}%
+                              <Box sx={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: emotionColors[emotionData.emotion] || '#607d8b',
+                                ml: 1
+                              }} />
+                            </Box>
+                          </Typography>
+                          <Typography variant="caption" sx={{
+                            color: '#757575',
+                            display: 'block',
+                            mt: 0.5
+                          }}>
+                            Detected at: {new Date(emotionData.timestamp).toLocaleTimeString()}
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      <Box sx={{
+                        height: isMobile ? 250 : 300,
+                        borderRadius: '12px',
+                        overflow: 'hidden',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        backgroundColor: '#0a0a0a',
+                        mt: 2
+                      }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
+                            <XAxis
+                              dataKey="time"
+                              stroke="#b0b0b0"
+                              tick={{ fill: '#b0b0b0', fontSize: isMobile ? 10 : 12 }}
+                            />
+                            <YAxis
+                              stroke="#b0b0b0"
+                              tick={{ fill: '#b0b0b0', fontSize: isMobile ? 10 : 12 }}
+                              label={!isMobile ? {
+                                value: 'Confidence %',
+                                angle: -90,
+                                position: 'insideLeft',
+                                fill: '#b0b0b0',
+                                fontSize: 12
+                              } : undefined}
+                            />
+                            <RechartsTooltip
+                              contentStyle={{
+                                backgroundColor: '#0a0a0a',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)'
+                              }}
+                              itemStyle={{
+                                color: '#f5f5f5'
+                              }}
+                              labelStyle={{
+                                color: '#b0b0b0',
+                                fontWeight: 500
+                              }}
+                            />
+                            {!isMobile && (
+                              <Legend
+                                wrapperStyle={{
+                                  paddingTop: '10px',
+                                  color: '#f5f5f5'
+                                }}
+                              />
+                            )}
+                            <Line
+                              type="monotone"
+                              dataKey="confidence"
+                              stroke={emotionColors[emotionData.emotion] || '#607d8b'}
+                              strokeWidth={2}
+                              dot={false}
+                              activeDot={{
+                                r: 6,
+                                stroke: '#ffffff',
+                                strokeWidth: 2,
+                                fill: emotionColors[emotionData.emotion] || '#607d8b'
+                              }}
+                              name="Confidence Level"
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </>
+                  ) : (
+                    <Box sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: isMobile ? 200 : 300,
+                      color: '#757575',
+                      border: '1px dashed rgba(255, 255, 255, 0.12)',
+                      borderRadius: '12px',
+                      backgroundColor: '#111111',
+                      p: 3,
+                      textAlign: 'center',
+                      gap: 1
+                    }}>
+                      <Typography variant="h6" sx={{ color: '#b0b0b0', fontWeight: 500 }}>
+                        No Emotion Data Available
+                      </Typography>
+                      <Typography variant="body2">
+                        Start the session to begin real-time emotion analysis
+                      </Typography>
+                    </Box>
                   )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <div className="mt-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
-            <p className="text-red-300">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="mt-1 text-xs text-red-400 hover:text-red-300"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-      </div>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
+      </ThemeProvider>
     </div>
   );
-}
+};
+
+export default VideoStreamer;
