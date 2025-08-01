@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Brain, Activity, BarChart2, Play, User, Smile, Frown, Meh, Clock, Award, ChevronRight, Twitter, Facebook, Linkedin, Instagram } from 'lucide-react';
+import { Brain, Activity, BarChart2, User, Smile, Frown, Meh, Clock, Award, ChevronRight, Twitter, Facebook, Linkedin, Instagram } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -628,15 +628,15 @@ const LandingPage: React.FC = () => {
                 </li>
                 <li>
                   <button
-                  onClick={() => handleNavigation('/career')}
+                  onClick={() => handleNavigation('/')}
                     className="text-gray-500 hover:text-white transition"
                   >
-                    Careers
+                    Careers (soon)
                   </button>
                 </li>
                 <li>
                   <button
-                    onClick={() => handleNavigation('/blog')}
+                    onClick={() => handleNavigation('/')}
                     className="text-gray-500 hover:text-white transition"
                   >
                     Blog
