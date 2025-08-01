@@ -58,7 +58,6 @@ const History: React.FC = () => {
             const count = typeof detail === "number" ? detail : detail?.count || 0;
             if (count > dominant.count) dominant = { emotion, count };
           }
-
           if (
             !dayDominantEmotion[day] ||
             new Date(trend.period_start) > new Date(dayDominantEmotion[day].timestamp)
@@ -75,7 +74,13 @@ const History: React.FC = () => {
         });
 
         const updatedColors: { [day: number]: string } = {};
-        for (let day = 1; day <= 30; day++) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        for (let day = 1; day <= daysInMonth; day++) {
           const mood = dayDominantEmotion[day]?.emotion || "neutral";
           updatedColors[day] = moodColors[mood] || "bg-yellow-500";
         }
@@ -115,9 +120,9 @@ const History: React.FC = () => {
 
   return (
     <div className="p-4 md:p-6 md:ml-64 bg-black min-h-screen text-white">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="max-w-7xl mx-auto space-y-6 md:space-y-8"
       >
         <div className="flex flex-col sm:flex-row border border-gray-800 items-center justify-between bg-[#0a0a0a] p-4 md:p-6 rounded-xl shadow-lg">
@@ -125,23 +130,26 @@ const History: React.FC = () => {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }} 
-            animate={{ opacity: 1, x: 0 }} 
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
             className="flex-1 bg-[#0a0a0a] p-3 md:p-4 rounded-lg shadow-md border border-gray-800"
           >
             <div className="flex flex-col sm:flex-row items-center justify-between mb-3">
               <h2 className="text-base md:text-lg font-semibold text-white mb-2 sm:mb-0">Mood Calendar</h2>
               <div className="flex items-center space-x-1 text-gray-400 text-xs">
                 <CalendarIcon className="w-3 h-3 md:w-4 md:h-4" />
-                <span>April 2025</span>
+                <span>{new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-7 gap-1 mb-3 md:mb-4">
-              {Array.from({ length: 30 }, (_, i) => {
+              {Array.from({
+                length: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+              }, (_, i) => {
                 const day = i + 1;
-                const colorClass = dayColors[day] || "bg-yellow-500";
+                const colorClass = dayColors[day] || 'bg-yellow-500';
+                console.log(dayColors)
                 return (
                   <div
                     key={day}
@@ -163,9 +171,9 @@ const History: React.FC = () => {
             </div>
           </motion.div>
 
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }} 
-            animate={{ opacity: 1, x: 0 }} 
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
             className="flex-1 bg-[#0a0a0a] p-3 md:p-4 rounded-lg shadow-md border border-gray-800 flex flex-col items-center justify-center"
           >
             <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4 text-white">Emotion Distribution</h2>
@@ -269,8 +277,8 @@ const History: React.FC = () => {
                           <div
                             key={emotion}
                             className={`rounded-lg px-3 py-2 md:px-4 md:py-3 flex flex-col border ${isDominant
-                                ? "bg-yellow-500/10 border-yellow-600 shadow-md"
-                                : "bg-[#222] border-gray-700"
+                              ? "bg-yellow-500/10 border-yellow-600 shadow-md"
+                              : "bg-[#222] border-gray-700"
                               }`}
                           >
                             <div className="flex items-center justify-between mb-1">
@@ -296,9 +304,9 @@ const History: React.FC = () => {
           </div>
         )}
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="bg-[#0a0a0a] p-3 md:p-4 rounded-lg shadow-md border border-gray-800"
         >
           <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4 text-white">Your Emotion Trends</h2>
