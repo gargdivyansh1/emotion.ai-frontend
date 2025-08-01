@@ -1,28 +1,45 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell
 } from "recharts";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { 
-  FiLogOut, FiSettings, FiUser, FiActivity, FiBarChart2, 
+import {
+  FiLogOut, FiSettings, FiUser, FiActivity, FiBarChart2,
   FiHelpCircle, FiCalendar, FiClock, FiAward, FiTrendingUp,
   FiEdit, FiLock, FiMail, FiBell, FiCreditCard, FiShield
 } from "react-icons/fi";
 import { useMediaQuery } from "react-responsive";
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-tabs/style/react-tabs.css';
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom";
+import moment from "moment";
+
+const moodColorMap = {
+  happy: "text-yellow-400 bg-yellow-900/30",
+  sad: "text-blue-400 bg-blue-900/30",
+  angry: "text-red-400 bg-red-900/30",
+  surprised: "text-purple-400 bg-purple-900/30",
+  neutral: "text-slate-300 bg-slate-800/30",
+  calm: "text-blue-400 bg-blue-900/30",
+  relaxed: "text-green-400 bg-green-900/30",
+};
+
+function getTopMoods(emotionSummary: { [s: string]: unknown; } | ArrayLike<unknown>) {
+  const sorted = Object.entries(emotionSummary)
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([mood]) => mood);
+  return [sorted[0] || "neutral", sorted[1] || "neutral"];
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-// Types for better type safety
 type User = {
-  id: string; 
+  id: string;
   username: string;
   email: string;
   created_at: string;
@@ -32,13 +49,9 @@ type User = {
   subscription_plan?: string;
   subscription_end?: string;
   profile_picture?: string;
-};
-
-type EmotionData = {
-  emotion: string;
-  value: number;
-  color?: string;
-};
+  role: string;
+  two_factor_enabled: boolean;
+}; 
 
 type SessionTrend = {
   session: string;
@@ -60,13 +73,7 @@ type StatCard = {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 const Profile: React.FC = () => {
-
   const navigate = useNavigate();
-
-  const handleNavigation = (path: string) => {
-    navigate(path);
-  };
-
   const [user, setUser] = useState<User | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -76,29 +83,181 @@ const Profile: React.FC = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
     notifications: true,
     darkMode: true
   });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({
+    password: '',
+    confirmText: ''
+  })
+  const getDaysLabels = () => {
+    const today = new Date();
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+    const labels = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(today);
+      day.setDate(today.getDate() - i);
+      labels.push(days[day.getDay()]);
+    }
+
+    return labels;
+  }
+  const [weeklyActivity, setWeeklyActivity] = useState([]);
+  useEffect(() => {
+    const fetchWeeklyData = async () => {
+      try {
+
+        const token = localStorage.getItem('token')
+        const res = await axios.get(API_BASE_URL + "/emotion/getting_seven_days_count", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        console.log(res)
+        const counts = res.data;
+
+        const labels = getDaysLabels();
+
+        const formatted = counts.map((count, i) => ({
+          day: labels[i],
+          sessions: count
+        }));
+
+        setWeeklyActivity(formatted);
+
+      } catch (error) {
+        console.error('Failed to load weekly activity:', error)
+      }
+    }
+
+    fetchWeeklyData();
+
+  }, [])
+  const [emotionData, setEmotionData] = useState([]);
+  useEffect(() => {
+    const fetchEmotionCounts = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/emotion/getting_seven_days_emotions_count`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+
+        const rawData = res.data;
+
+        const transformed = Object.entries(rawData).map(([emotion, value]) => ({
+          emotion,
+          value,
+        }));
+
+        setEmotionData(transformed);
+      } catch (err) {
+        console.error("Failed to fetch emotion counts:", err);
+      }
+    };
+
+    fetchEmotionCounts();
+  }, []);
+  const [isDeleting, setIsDeleting] = useState(false)
   const isMobile = useMediaQuery({ maxWidth: 768 });
+  const [showModal, setShowModal] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(user?.two_factor_enabled || false)
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const [trends, setTrends] = useState([]);
+
+  useEffect(() => {
+  const fetchTrends = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await axios.get(API_BASE_URL + "/emotion/user/emotions-trends", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const transformed = res.data.map((item) => {
+        const createdDate = moment(item.created_at).format("YYYY-MM-DD");
+        const duration = moment(item.period_end).diff(moment(item.period_start), "seconds"); 
+        const [moodAfter, moodBefore] = getTopMoods(item.emotion_summary);
+        return {
+          date: createdDate,
+          duration: `${duration} seconds`,
+          type: "Mindfulness",
+          moodBefore,
+          moodAfter,
+        };
+      });
+
+      setTrends(transformed);
+    } catch (error) {
+      console.error("Error fetching emotion trends:", error);
+    }
+  };
+
+  fetchTrends();
+}, []);
+
+  const handleEnableClick = async () => {
+    setShowModal(true);
+    await axios.post(API_BASE_URL + "/api/send_otp", {
+      email: user?.email,
+    })
+
+    await sleep(2000);
+    toast.success('OTP Send...')
+  };
+
+  const handleVerify = async () => {
+    try {
+      const response = await axios.post(API_BASE_URL + "/api/verify_otp", {
+        email: user?.email,
+        otp,
+        enable: !user?.two_factor_enabled,
+      });
+
+      if (response.data.success) {
+        setTwoFactorEnabled(!twoFactorEnabled);
+        const val = !twoFactorEnabled
+        if (val == false) {
+          toast.dark('Two-Factor-Authentication-Disabled')
+        } else if (val == true) {
+          toast.success('Two-Factor-Authentication-Enabled')
+        }
+        setShowModal(false);
+        setOtp('');
+      } else {
+        alert("Invalid OTP");
+      }
+
+      fetchProfile()
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    }
+  };
 
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem("token");
-      //console.log(token)
       const res = await axios.get(`${API_BASE_URL}/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      //console.log(res)
+
       setUser(res.data);
-      setFormData({
+      setFormData(prev => ({
+        ...prev,
         username: res.data.username,
         email: res.data.email,
-        notifications: true,
-        darkMode: true
-      });
+      }));
     } catch (err) {
       console.error("Error fetching profile:", err);
       toast.error("Failed to load profile data");
@@ -114,7 +273,97 @@ const Profile: React.FC = () => {
     return name.split(" ").map((n) => n[0]).join("").toUpperCase();
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation.confirmText !== `deleteMYaccount$${user?.username}`) {
+      toast.error('Please type the correct input for deletion...')
+    }
+
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      await axios.delete(`${API_BASE_URL}/users/delete-profile`, {
+        data: {
+          current_password: deleteConfirmation.password
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      toast.success("Account deleted successfully");
+      localStorage.removeItem("token");
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Delete failed:", error)
+      toast.error(error.response?.data?.detail || 'Failed to delete account')
+    }
+  }
+
+  const handleExportAllReports = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Please login to export reports');
+        return;
+      }
+
+      toast.info('Preparing your reports...', {
+        autoClose: false,
+        isLoading: true
+      });
+
+      const response = await axios.get(
+        `${API_BASE_URL}/reports/export/pdf/all-emotions`,
+        {
+          responseType: 'blob',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Cache-Control': 'no-cache'
+          }
+        }
+      );
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+
+      const filename = `emotion_reports_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
+      link.setAttribute('download', filename);
+
+      document.body.appendChild(link);
+      link.click();
+
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast.dismiss();
+        toast.success('Reports downloaded successfully!');
+      }, 100);
+
+    } catch (error) {
+      console.error('Export Failed:', error);
+      toast.dismiss();
+
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          toast.error('Session expired - please login again');
+        } else if (error.response?.status === 404) {
+          toast.error('No reports available for export');
+        } else {
+          toast.error(error.response?.data?.detail || 'Failed to export reports');
+        }
+      } else {
+        toast.error('Network error - please try again later');
+      }
+    }
+  };
+
   const handleLogoutClick = () => setShowLogoutModal(true);
+
 
   const confirmLogout = async () => {
     try {
@@ -157,51 +406,58 @@ const Profile: React.FC = () => {
 
   const handleSaveProfile = async () => {
     try {
+      if (formData.new_password && formData.new_password !== formData.confirm_password) {
+        toast.error("New passwords don't match");
+        return;
+      }
+
+      if (!formData.current_password) {
+        toast.error("Current password is required");
+        return;
+      }
+
       const token = localStorage.getItem("token");
-      await axios.patch(`${API_BASE_URL}/users/update`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await axios.put(
+        `${API_BASE_URL}/users/update`,
+        {
+          current_password: formData.current_password,
+          new_username: formData.username !== user?.username ? formData.username : null,
+          new_email: formData.email !== user?.email ? formData.email : null,
+          new_password: formData.new_password || null,
+          confirm_password: formData.confirm_password || null
         },
-      });
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       toast.success("Profile updated successfully!");
       setIsEditing(false);
-      fetchProfile(); // Refresh user data
+      fetchProfile();
+
+      setFormData(prev => ({
+        ...prev,
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      }));
+
     } catch (error) {
       console.error("Update failed:", error);
-      toast.error("Failed to update profile");
+      if (axios.isAxiosError(error)) {
+        toast.error(error.response?.data?.detail || "Failed to update profile");
+      } else {
+        toast.error("An unexpected error occurred");
+      }
     }
   };
 
-  // Emotion data with colors
-  const emotionData: EmotionData[] = [
-    { emotion: "Happiness", value: 70, color: COLORS[0] },
-    { emotion: "Sadness", value: 15, color: COLORS[1] },
-    { emotion: "Anger", value: 5, color: COLORS[2] },
-    { emotion: "Surprise", value: 10, color: COLORS[3] },
-    { emotion: "Neutral", value: 20, color: COLORS[4] },
-  ];
+  const handleNavigation = (path: string) => {
+    navigate(path);
+  };
 
-  // Session trends data
-  const sessionTrends: SessionTrend[] = [
-    { session: "Week 1", happiness: 60, sadness: 20, anxiety: 15, excitement: 5 },
-    { session: "Week 2", happiness: 65, sadness: 18, anxiety: 12, excitement: 8 },
-    { session: "Week 3", happiness: 70, sadness: 15, anxiety: 10, excitement: 12 },
-    { session: "Week 4", happiness: 75, sadness: 12, anxiety: 8, excitement: 15 },
-    { session: "Week 5", happiness: 80, sadness: 10, anxiety: 5, excitement: 20 },
-  ];
-
-  // Weekly activity data
-  const weeklyActivity = [
-    { day: "Mon", sessions: 2 },
-    { day: "Tue", sessions: 3 },
-    { day: "Wed", sessions: 1 },
-    { day: "Thu", sessions: 4 },
-    { day: "Fri", sessions: 2 },
-    { day: "Sat", sessions: 1 },
-    { day: "Sun", sessions: 0 },
-  ];
-
-  // Stats cards data
   const stats: StatCard[] = [
     {
       title: "Sessions Attended",
@@ -209,7 +465,7 @@ const Profile: React.FC = () => {
       description: "Number of sessions you actively joined",
       icon: <FiActivity className="text-blue-400" size={24} />,
       trend: 'up',
-      trendValue: '+12% from last month'
+      trendValue: 'will be evaluated after a month'
     },
     {
       title: "Sessions Remaining",
@@ -217,7 +473,7 @@ const Profile: React.FC = () => {
       description: "Sessions left in your current plan",
       icon: <FiClock className="text-purple-400" size={24} />,
       trend: 'down',
-      trendValue: '-5% from last month'
+      trendValue: 'will be evaluated after a month'
     },
     {
       title: "Total Sessions",
@@ -225,23 +481,15 @@ const Profile: React.FC = () => {
       description: "All sessions allocated to you",
       icon: <FiCalendar className="text-green-400" size={24} />,
       trend: 'up',
-      trendValue: '+20% from last month'
+      trendValue: 'will be evaluated after a month'
     },
     {
       title: "Achievements",
-      value: 5,
+      value: 0,
       description: "Badges and milestones earned",
       icon: <FiAward className="text-yellow-400" size={24} />,
       trend: 'neutral'
     }
-  ];
-
-  // Recent activity data
-  const recentActivity = [
-    { id: 1, type: "Session", description: "Completed mindfulness session", time: "2 hours ago" },
-    { id: 2, type: "Goal", description: "Reached weekly goal", time: "1 day ago" },
-    { id: 3, type: "Achievement", description: "Earned 'Consistent' badge", time: "3 days ago" },
-    { id: 4, type: "Session", description: "Started new program", time: "1 week ago" },
   ];
 
   if (!user) {
@@ -262,11 +510,10 @@ const Profile: React.FC = () => {
 
   return (
     <div className="p-4 md:p-8 min-h-screen bg-black text-white md:ml-64 space-y-6 relative">
-      {/* Mobile Header */}
       {isMobile && (
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Profile</h1>
-          <button 
+          <button
             onClick={() => setShowMobileMenu(!showMobileMenu)}
             className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors"
           >
@@ -277,7 +524,6 @@ const Profile: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile Menu */}
       {isMobile && showMobileMenu && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -286,35 +532,35 @@ const Profile: React.FC = () => {
           className="absolute z-10 top-16 right-0 w-full bg-[#0a0a0a] border border-slate-800 rounded-lg shadow-lg p-4"
         >
           <div className="flex flex-col space-y-2">
-            <button 
+            <button
               onClick={() => { setActiveTab("overview"); setShowMobileMenu(false); }}
               className={`flex items-center space-x-2 p-2 rounded-lg ${activeTab === "overview" ? "bg-slate-800" : "hover:bg-slate-800"}`}
             >
               <FiUser />
               <span>Overview</span>
             </button>
-            <button 
+            <button
               onClick={() => { setActiveTab("stats"); setShowMobileMenu(false); }}
               className={`flex items-center space-x-2 p-2 rounded-lg ${activeTab === "stats" ? "bg-slate-800" : "hover:bg-slate-800"}`}
             >
               <FiTrendingUp />
               <span>Statistics</span>
             </button>
-            <button 
+            <button
               onClick={() => { setActiveTab("settings"); setShowMobileMenu(false); }}
               className={`flex items-center space-x-2 p-2 rounded-lg ${activeTab === "settings" ? "bg-slate-800" : "hover:bg-slate-800"}`}
             >
               <FiSettings />
               <span>Settings</span>
             </button>
-            <button 
+            <button
               onClick={() => { setActiveTab("help"); setShowMobileMenu(false); }}
               className={`flex items-center space-x-2 p-2 rounded-lg ${activeTab === "help" ? "bg-slate-800" : "hover:bg-slate-800"}`}
             >
               <FiHelpCircle />
               <span>Help</span>
             </button>
-            <button 
+            <button
               onClick={handleLogoutClick}
               className="flex items-center space-x-2 p-2 rounded-lg text-red-400 hover:bg-slate-800"
             >
@@ -330,13 +576,12 @@ const Profile: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-6xl mx-auto space-y-6"
       >
-        {/* Profile Header */}
         <div className="flex flex-col md:flex-row items-center justify-between p-4 md:p-6 rounded-2xl bg-[#0a0a0a] border border-slate-800">
           <div className="flex items-center space-x-4 mb-4 md:mb-0">
             {user.profile_picture ? (
-              <img 
-                src={user.profile_picture} 
-                alt="Profile" 
+              <img
+                src={user.profile_picture}
+                alt="Profile"
                 className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-slate-700"
               />
             ) : (
@@ -397,10 +642,9 @@ const Profile: React.FC = () => {
           </div>
         </div>
 
-        {/* Main Content with Tabs */}
-        <Tabs selectedIndex={['overview', 'stats', 'settings', 'help'].indexOf(activeTab)} 
-              onSelect={(index) => setActiveTab(['overview', 'stats', 'settings', 'help'][index])}
-              className="border border-slate-800 rounded-2xl overflow-hidden">
+        <Tabs selectedIndex={['overview', 'stats', 'settings', 'help'].indexOf(activeTab)}
+          onSelect={(index) => setActiveTab(['overview', 'stats', 'settings', 'help'][index])}
+          className="border border-slate-800 rounded-2xl overflow-hidden">
           <TabList className="flex bg-[#0a0a0a] border-b border-slate-800">
             <Tab className="px-4 py-3 cursor-pointer focus:outline-none" selectedClassName="text-blue-400 border-b-2 border-blue-400">
               <div className="flex items-center space-x-2">
@@ -430,9 +674,7 @@ const Profile: React.FC = () => {
 
           <div className="bg-[#0a0a0a] p-4 md:p-6">
             <TabPanel>
-              {/* Overview Tab Content */}
               <div className="space-y-6">
-                {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {stats.map((item, index) => (
                     <motion.div
@@ -470,10 +712,9 @@ const Profile: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Charts Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <motion.div 
-                    whileHover={{ scale: 1.01 }} 
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
                     className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800"
                   >
                     <h3 className="text-lg text-white font-semibold mb-4">Emotion Distribution</h3>
@@ -483,32 +724,33 @@ const Profile: React.FC = () => {
                           <PolarGrid stroke="#334155" />
                           <PolarAngleAxis dataKey="emotion" stroke="#cbd5e1" fontSize={12} />
                           <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fill: "#cbd5e1", fontSize: 10 }} />
-                          <Radar 
-                            name="Emotion Level" 
-                            dataKey="value" 
-                            stroke="#ffffff" 
-                            fill="#ffffff" 
-                            fillOpacity={0.15} 
+                          <Radar
+                            name="Emotion Level"
+                            dataKey="value"
+                            stroke="#ffffff"
+                            fill="#ffffff"
+                            fillOpacity={0.15}
                             animationDuration={1500}
                           />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: "#0f172a", 
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#0f172a",
                               borderColor: "#1e293b",
                               borderRadius: "0.5rem",
                               boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
                             }}
-                            labelStyle={{ color: "#f1f5f9", fontWeight: 600 }} 
-                            itemStyle={{ color: "#e2e8f0" }} 
-                            formatter={(value) => [`${value}%`, 'Intensity']}
+                            labelStyle={{ color: "#f1f5f9", fontWeight: 600 }}
+                            itemStyle={{ color: "#e2e8f0" }}
+                            formatter={(value) => [`${value}`, "Count"]}
                           />
                         </RadarChart>
                       </ResponsiveContainer>
                     </div>
                   </motion.div>
 
-                  <motion.div 
-                    whileHover={{ scale: 1.01 }} 
+
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
                     className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800"
                   >
                     <h3 className="text-lg text-white font-semibold mb-4">Weekly Activity</h3>
@@ -517,19 +759,19 @@ const Profile: React.FC = () => {
                         <BarChart data={weeklyActivity}>
                           <XAxis dataKey="day" stroke="#cbd5e1" />
                           <YAxis stroke="#cbd5e1" />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: "#0f172a", 
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#0f172a",
                               borderColor: "#1e293b",
                               borderRadius: "0.5rem"
                             }}
-                            labelStyle={{ color: "#f1f5f9" }} 
-                            itemStyle={{ color: "#e2e8f0" }} 
+                            labelStyle={{ color: "#f1f5f9" }}
+                            itemStyle={{ color: "#e2e8f0" }}
                             formatter={(value) => [`${value} sessions`, 'Count']}
                           />
-                          <Bar 
-                            dataKey="sessions" 
-                            fill="#8884d8" 
+                          <Bar
+                            dataKey="sessions"
+                            fill="#8884d8"
                             radius={[4, 4, 0, 0]}
                             animationDuration={1500}
                           >
@@ -542,39 +784,14 @@ const Profile: React.FC = () => {
                     </div>
                   </motion.div>
                 </div>
-
-                {/* Recent Activity */}
-                <div className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800">
-                  <h3 className="text-lg text-white font-semibold mb-4">Recent Activity</h3>
-                  <div className="space-y-3">
-                    {recentActivity.map((activity) => (
-                      <motion.div 
-                        key={activity.id}
-                        whileHover={{ x: 5 }}
-                        className="flex items-start p-3 rounded-lg bg-slate-900/50 hover:bg-slate-900 transition-colors"
-                      >
-                        <div className="flex-shrink-0 mt-1">
-                          {activity.type === "Session" && <FiActivity className="text-blue-400" />}
-                          {activity.type === "Goal" && <FiAward className="text-green-400" />}
-                          {activity.type === "Achievement" && <FiAward className="text-yellow-400" />}
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <p className="text-sm font-medium text-white">{activity.description}</p>
-                          <p className="text-xs text-slate-400">{activity.time}</p>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
               </div>
             </TabPanel>
 
             <TabPanel>
-              {/* Statistics Tab Content */}
               <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <motion.div 
-                    whileHover={{ scale: 1.01 }} 
+                {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
                     className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800"
                   >
                     <h3 className="text-lg text-white font-semibold mb-4">Emotion Trends Over Time</h3>
@@ -583,56 +800,56 @@ const Profile: React.FC = () => {
                         <LineChart data={sessionTrends}>
                           <XAxis dataKey="session" stroke="#cbd5e1" />
                           <YAxis stroke="#cbd5e1" />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: "#0f172a", 
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#0f172a",
                               borderColor: "#1e293b",
                               borderRadius: "0.5rem"
                             }}
-                            labelStyle={{ color: "#f1f5f9" }} 
-                            itemStyle={{ color: "#e2e8f0" }} 
+                            labelStyle={{ color: "#f1f5f9" }}
+                            itemStyle={{ color: "#e2e8f0" }}
                             formatter={(value, name) => [`${value}%`, name]}
                           />
-                          <Legend 
-                            wrapperStyle={{ 
+                          <Legend
+                            wrapperStyle={{
                               color: "#cbd5e1",
                               paddingTop: '10px'
-                            }} 
+                            }}
                           />
-                          <Line 
-                            type="monotone" 
-                            dataKey="happiness" 
-                            stroke="#e5e7eb" 
-                            strokeWidth={2} 
-                            dot={{ r: 4 }} 
-                            name="Happiness" 
+                          <Line
+                            type="monotone"
+                            dataKey="happiness"
+                            stroke="#e5e7eb"
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                            name="Happiness"
                             animationDuration={1500}
                           />
-                          <Line 
-                            type="monotone" 
-                            dataKey="sadness" 
-                            stroke="#64748b" 
-                            strokeWidth={2} 
-                            dot={{ r: 4 }} 
-                            name="Sadness" 
+                          <Line
+                            type="monotone"
+                            dataKey="sadness"
+                            stroke="#64748b"
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                            name="Sadness"
                             animationDuration={1500}
                           />
-                          <Line 
-                            type="monotone" 
-                            dataKey="anxiety" 
-                            stroke="#f43f5e" 
-                            strokeWidth={2} 
-                            dot={{ r: 4 }} 
-                            name="Anxiety" 
+                          <Line
+                            type="monotone"
+                            dataKey="anxiety"
+                            stroke="#f43f5e"
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                            name="Anxiety"
                             animationDuration={1500}
                           />
-                          <Line 
-                            type="monotone" 
-                            dataKey="excitement" 
-                            stroke="#10b981" 
-                            strokeWidth={2} 
-                            dot={{ r: 4 }} 
-                            name="Excitement" 
+                          <Line
+                            type="monotone"
+                            dataKey="excitement"
+                            stroke="#10b981"
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                            name="Excitement"
                             animationDuration={1500}
                           />
                         </LineChart>
@@ -640,8 +857,8 @@ const Profile: React.FC = () => {
                     </div>
                   </motion.div>
 
-                  <motion.div 
-                    whileHover={{ scale: 1.01 }} 
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
                     className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800"
                   >
                     <h3 className="text-lg text-white font-semibold mb-4">Emotion Breakdown</h3>
@@ -663,9 +880,9 @@ const Profile: React.FC = () => {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: "#0f172a", 
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#0f172a",
                               borderColor: "#1e293b",
                               borderRadius: "0.5rem"
                             }}
@@ -675,33 +892,36 @@ const Profile: React.FC = () => {
                       </ResponsiveContainer>
                     </div>
                   </motion.div>
-                </div>
+                </div> */}
 
-                {/* Session History */}
                 <div className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800">
                   <h3 className="text-lg text-white font-semibold mb-4">Session History</h3>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-800">
                       <thead>
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Date</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Duration</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Type</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Mood Before</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Mood After</th>
+                          {["Date", "Duration", "Type", "Mood Before", "Mood After"].map((head) => (
+                            <th key={head} className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                              {head}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {[1, 2, 3, 4, 5].map((item) => (
-                          <tr key={item} className="hover:bg-slate-900/50">
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-300">2023-06-{10 + item}</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-300">{15 + item} mins</td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-300">Mindfulness</td>
+                        {trends.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-900/50">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-300">{item.date}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-300">{item.duration}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-300">{item.type}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">
-                              <span className="px-2 py-1 text-xs rounded-full bg-blue-900/30 text-blue-400">Calm</span>
+                              <span className={`px-2 py-1 text-xs rounded-full ${moodColorMap[item.moodBefore] || "bg-slate-800/30 text-slate-300"}`}>
+                                {item.moodBefore}
+                              </span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">
-                              <span className="px-2 py-1 text-xs rounded-full bg-green-900/30 text-green-400">Relaxed</span>
+                              <span className={`px-2 py-1 text-xs rounded-full ${moodColorMap[item.moodAfter] || "bg-slate-800/30 text-slate-300"}`}>
+                                {item.moodAfter}
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -713,7 +933,6 @@ const Profile: React.FC = () => {
             </TabPanel>
 
             <TabPanel>
-              {/* Settings Tab Content */}
               <div className="space-y-6">
                 <div className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800">
                   <div className="flex justify-between items-center mb-6">
@@ -789,11 +1008,27 @@ const Profile: React.FC = () => {
                     {isEditing && (
                       <>
                         <div>
+                          <label className="block text-sm font-medium text-slate-400 mb-1">Current Password</label>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              name="current_password"
+                              value={formData.current_password}
+                              onChange={handleInputChange}
+                              placeholder="••••••••"
+                              className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                            />
+                            <FiLock className="absolute right-3 top-3.5 text-slate-500" />
+                          </div>
+                        </div>
+                        <div>
                           <label className="block text-sm font-medium text-slate-400 mb-1">New Password</label>
                           <div className="relative">
                             <input
                               type="password"
-                              name="password"
+                              name="new_password"
+                              value={formData.new_password}
+                              onChange={handleInputChange}
                               placeholder="••••••••"
                               className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
                             />
@@ -805,7 +1040,9 @@ const Profile: React.FC = () => {
                           <div className="relative">
                             <input
                               type="password"
-                              name="confirmPassword"
+                              name="confirm_password"
+                              value={formData.confirm_password}
+                              onChange={handleInputChange}
                               placeholder="••••••••"
                               className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
                             />
@@ -827,12 +1064,11 @@ const Profile: React.FC = () => {
                             <p className="text-xs text-slate-500">Receive email notifications about your account</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               name="notifications"
                               checked={formData.notifications}
-                              onChange={handleInputChange}
-                              className="sr-only peer" 
+                              className="sr-only peer"
                             />
                             <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                           </label>
@@ -840,15 +1076,15 @@ const Profile: React.FC = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1">Dark Mode</label>
-                            <p className="text-xs text-slate-500">Toggle between light and dark theme</p>
+                            <p className="text-xs text-slate-500">No light mode is available</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               name="darkMode"
                               checked={formData.darkMode}
-                              onChange={handleInputChange}
-                              className="sr-only peer" 
+                              className="sr-only peer"
+                              onClick={(e) => e.preventDefault()}
                             />
                             <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                           </label>
@@ -867,11 +1103,59 @@ const Profile: React.FC = () => {
                             <label className="block text-sm font-medium text-slate-300 mb-1">Two-Factor Authentication</label>
                             <p className="text-xs text-slate-500">Add an extra layer of security to your account</p>
                           </div>
-                          <button className="px-3 py-1 text-sm bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700">
-                            Enable
+                          <button
+                            onClick={handleEnableClick}
+                            className="px-3 py-1 text-sm bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700"
+                          >
+                            {user.two_factor_enabled ? "Disable" : "Enable"}
                           </button>
                         </div>
-                        <div className="flex items-center justify-between">
+
+                        {showModal && (
+                          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                            <div className="relative bg-white p-6 rounded-2xl shadow-xl w-[90%] max-w-md transform transition-all duration-300 scale-100">
+
+                              <button
+                                onClick={() => setShowModal(false)}
+                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 focus:outline-none"
+                                aria-label="Close Modal"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-5 w-5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+
+                              <h2 className="text-2xl font-bold mb-1 text-gray-800 text-center">Two-Factor Authentication</h2>
+                              <p className="text-sm text-gray-500 mb-5 text-center">
+                                Enter the 6-digit OTP sent to your email
+                              </p>
+
+                              <input
+                                type="text"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                className="w-full border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-400 outline-none rounded-lg px-4 py-2 mb-4 text-sm text-gray-800 transition"
+                                placeholder="Enter 6-digit OTP"
+                                maxLength={6}
+                              />
+
+                              <button
+                                onClick={handleVerify}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all"
+                              >
+                                Verify & {user.enable_two_factor ? "Disable" : "Enable"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* <div className="flex items-center justify-between">
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1">Active Sessions</label>
                             <p className="text-xs text-slate-500">View and manage your active login sessions</p>
@@ -879,7 +1163,7 @@ const Profile: React.FC = () => {
                           <button className="px-3 py-1 text-sm bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700">
                             Manage
                           </button>
-                        </div>
+                        </div> */}
                       </div>
                     </div>
 
@@ -906,9 +1190,11 @@ const Profile: React.FC = () => {
                       ) : (
                         <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800">
                           <p className="text-sm text-slate-400 mb-3">You don't have an active subscription</p>
-                          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm">
-                            Upgrade Plan
-                          </button>
+                          <Link to='/pricing'>
+                            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm">
+                              Upgrade Plan
+                            </button>
+                          </Link>
                         </div>
                       )}
                     </div>
@@ -918,16 +1204,101 @@ const Profile: React.FC = () => {
                 <div className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800">
                   <h3 className="text-xl font-semibold mb-6">Danger Zone</h3>
                   <div className="space-y-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-red-900/20 rounded-lg border border-red-900/50">
-                      <div className="mb-2 md:mb-0">
-                        <h4 className="font-medium text-red-400">Delete Account</h4>
-                        <p className="text-sm text-red-400/70">
-                          Permanently delete your account and all associated data
-                        </p>
+                    <div className="relative">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-red-900/20 rounded-lg border border-red-900/50">
+                        <div className="mb-2 md:mb-0">
+                          <h4 className="font-medium text-red-400">Delete Account</h4>
+                          <p className="text-sm text-red-400/70">
+                            Permanently delete your account and all associated data
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowDeleteModal(true)}
+                          className="px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-400 rounded-lg text-sm border border-red-900"
+                        >
+                          Delete Account
+                        </button>
                       </div>
-                      <button className="px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-400 rounded-lg text-sm border border-red-900">
-                        Delete Account
-                      </button>
+
+                      <AnimatePresence>
+                        {showDeleteModal && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+                            onClick={() => setShowDeleteModal(false)}
+                          >
+                            <motion.div
+                              initial={{ scale: 0.95, y: 20 }}
+                              animate={{ scale: 1, y: 0 }}
+                              exit={{ scale: 0.95, y: 20 }}
+                              className="bg-[#0a0a0a] border border-red-900/50 rounded-xl p-6 w-full max-w-md"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <h3 className="text-xl font-semibold text-red-400 mb-4">Confirm Account Deletion</h3>
+
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-slate-400 mb-1">
+                                    Current Password
+                                  </label>
+                                  <input
+                                    type="password"
+                                    value={deleteConfirmation.password}
+                                    onChange={(e) => setDeleteConfirmation({
+                                      ...deleteConfirmation,
+                                      password: e.target.value
+                                    })}
+                                    className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    placeholder="Enter your current password"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-slate-400 mb-1">
+                                    Type <span className="font-mono text-red-400">deleteMYaccount${user?.username}</span> to confirm
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={deleteConfirmation.confirmText}
+                                    onChange={(e) => setDeleteConfirmation({
+                                      ...deleteConfirmation,
+                                      confirmText: e.target.value
+                                    })}
+                                    className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    placeholder="delete my account"
+                                  />
+                                </div>
+
+                                <div className="flex justify-end space-x-3 pt-4">
+                                  <button
+                                    onClick={() => setShowDeleteModal(false)}
+                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg"
+                                    disabled={isDeleting}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={handleDeleteAccount}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg flex items-center"
+                                  >
+                                    {isDeleting ? (
+                                      <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Deleting...
+                                      </>
+                                    ) : "Delete Account"}
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                     <div className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-amber-900/20 rounded-lg border border-amber-900/50">
                       <div className="mb-2 md:mb-0">
@@ -936,7 +1307,9 @@ const Profile: React.FC = () => {
                           Download all your data in a portable format
                         </p>
                       </div>
-                      <button className="px-4 py-2 bg-amber-900/50 hover:bg-amber-900 text-amber-400 rounded-lg text-sm border border-amber-900">
+                      <button
+                        className="px-4 py-2 bg-amber-900/50 hover:bg-amber-900 text-amber-400 rounded-lg text-sm border border-amber-900"
+                        onClick={handleExportAllReports}>
                         Export Data
                       </button>
                     </div>
@@ -946,7 +1319,6 @@ const Profile: React.FC = () => {
             </TabPanel>
 
             <TabPanel>
-              {/* Help Tab Content */}
               <div className="space-y-6">
                 <div className="p-4 md:p-6 bg-[#111111] rounded-2xl border border-slate-800">
                   <h3 className="text-xl font-semibold mb-6">Help & Support</h3>
@@ -976,7 +1348,7 @@ const Profile: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/forum")}>
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/profile")}>
                       <div className="flex items-center mb-3">
                         <div className="p-2 bg-yellow-900/30 rounded-lg mr-3">
                           <FiUser className="text-yellow-400" size={20} />
@@ -985,10 +1357,11 @@ const Profile: React.FC = () => {
                       </div>
                       <p className="text-sm text-slate-400">
                         Connect with other users to share experiences and get advice.
+                        (The Community is in making and the service will available soon!!)
                       </p>
                     </div>
 
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/second-docs")}>
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors" onClick={() => handleNavigation("/docs")}>
                       <div className="flex items-center mb-3">
                         <div className="p-2 bg-green-900/30 rounded-lg mr-3">
                           <FiBarChart2 className="text-green-400" size={20} />
@@ -1037,7 +1410,6 @@ const Profile: React.FC = () => {
         </Tabs>
       </motion.div>
 
-      {/* Logout Modal */}
       <AnimatePresence>
         {showLogoutModal && (
           <motion.div
