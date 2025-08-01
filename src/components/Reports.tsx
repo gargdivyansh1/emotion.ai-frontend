@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, User } from "lucide-react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -34,10 +34,7 @@ const Reports: React.FC = () => {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Authentication required");
 
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        skip: ((currentPage - 1) * limit).toString()
-      });
+      const params = new URLSearchParams({});
 
       if (startDate) {
         params.append('start_date', new Date(startDate).toISOString().split('T')[0]);
@@ -55,6 +52,8 @@ const Reports: React.FC = () => {
         params,
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      console.log(params)
 
       const data = response.data.reports || [];
       const totalCount = response.data.total || data.length;
@@ -194,7 +193,7 @@ const Reports: React.FC = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="text-base md:text-lg font-semibold text-white">
-                          {new Date(report.generated_at).toLocaleDateString()}
+                          {new Date(report.generated_at).toISOString().split('T')[0]}
                         </h3>
                         <p className="text-gray-300 text-sm">Session: {report.session_id}</p>
                       </div>
