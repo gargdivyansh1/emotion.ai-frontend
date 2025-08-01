@@ -25,8 +25,6 @@ const LandingPage: React.FC = () => {
     },
   ];
 
-  const token = localStorage.getItem("token");
-
   const stats = [
     { value: '100+', label: 'Active Users' },
     { value: '94%', label: 'Accuracy Rate' },
