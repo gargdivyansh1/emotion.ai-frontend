@@ -28,6 +28,7 @@ export interface UserData {
   remainingSessions: number;
   isPremium: boolean;
   sessions: EmotionSession[];
+  enable_two_factor: boolean;
 }
 
 export interface EmotionAverages {
