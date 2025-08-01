@@ -23,7 +23,6 @@ const FullPageEmotionAIChatbot = () => {
     fearful: { icon: '😨', description: 'Anxious, worried' },
   };
 
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -49,19 +48,49 @@ const FullPageEmotionAIChatbot = () => {
     return 'neutral';
   };
 
+  const formatBotResponse = (text) => {
+    const paragraphs = text.split('\n').filter(p => p.trim() !== '');
+    
+    return paragraphs.map((paragraph, index) => {
+      if (paragraph.startsWith('-') || paragraph.startsWith('*') || paragraph.match(/^\d+\./)) {
+        const items = paragraph.split('\n').filter(i => i.trim() !== '');
+        return (
+          <ul key={index}>
+            {items.map((item, i) => (
+              <li key={i}>{item.replace(/^[-*]\s+|\d+\.\s+/, '').trim()}</li>
+            ))}
+          </ul>
+        );
+      }
+      
+      if (paragraph.match(/^[A-Z][^a-z]*$/)) {
+        return <h4 key={index}>{paragraph}</h4>;
+      }
+      
+      return <p key={index}>{paragraph}</p>;
+    });
+  };
+
   const generateGeminiResponse = async (userMessage, detectedEmotion) => {
     const API_key = import.meta.env.VITE_API_KEY;
     const prompt = `You are an empathetic AI therapist specializing in emotional support and mental well-being. 
     The user is feeling ${detectedEmotion} and shared: "${userMessage}".
 
-    Please provide a comprehensive response that:
+    Please provide a response that:
     1. Acknowledges and validates their feelings
     2. Demonstrates deep understanding of their emotional state
     3. Offers thoughtful insights or perspective
     4. Provides gentle guidance or coping strategies if appropriate
     5. Encourages further exploration of their feelings
-
-    Aim for 4-6 thoughtful sentences that create a supportive, non-judgmental space. Maintain a warm, professional tone that balances empathy with helpful suggestions.`;
+    
+    Format your response with:
+    - Clear paragraphs with proper spacing
+    - Bullet points for key insights (4-5 points)
+    - Use emojis where appropriate to enhance readability
+    - Bold important phrases
+    - End with an encouraging closing thought
+    
+    in only 150 words.. summarize`;
 
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_key}`, {
@@ -85,7 +114,7 @@ const FullPageEmotionAIChatbot = () => {
             temperature: 0.9,
             topP: 1,
             topK: 40,
-            maxOutputTokens: 1000,
+            maxOutputTokens: 200,
             stopSequences: []
           }
         })
@@ -100,12 +129,14 @@ const FullPageEmotionAIChatbot = () => {
       
       return {
         text: responseText,
+        formattedText: formatBotResponse(responseText),
         emotion: detectedEmotion
       };
     } catch (error) {
       console.error('Error calling Gemini API:', error);
       return {
         text: "I'm having trouble understanding right now. Could you try again?",
+        formattedText: formatBotResponse("I'm having trouble understanding right now. Could you try again?"),
         emotion: 'neutral'
       };
     }
@@ -130,6 +161,7 @@ const FullPageEmotionAIChatbot = () => {
       const botResponse = await generateGeminiResponse(inputValue, detectedEmotion);
       setMessages(prev => [...prev, { 
         text: botResponse.text, 
+        formattedText: botResponse.formattedText,
         sender: 'bot',
         emotion: botResponse.emotion
       }]);
@@ -137,6 +169,7 @@ const FullPageEmotionAIChatbot = () => {
       console.error('Error generating response:', error);
       setMessages(prev => [...prev, { 
         text: "Sorry, I encountered an error. Could you try again?", 
+        formattedText: formatBotResponse("Sorry, I encountered an error. Could you try again?"),
         sender: 'bot',
         emotion: 'neutral'
       }]);
@@ -204,7 +237,7 @@ const FullPageEmotionAIChatbot = () => {
                 </BotAvatar>
               )}
               <MessageBubble sender={message.sender} emotion={message.emotion}>
-                {message.text}
+                {message.formattedText || message.text}
               </MessageBubble>
             </Message>
           ))}
