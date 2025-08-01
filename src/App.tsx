@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
-import EmotionDetector from './components/EmotionDetector';
 import History from './components/History';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -21,23 +20,24 @@ import NotificationPage from './components/NotificationPage';
 import { AuthProvider } from './context/AuthContext';
 import Documentation from './pages/Documentation'
 import CommunityForum from './pages/CommunityForum'
+import VideoStreamer from './components/EmotionMonitor';
+import PrivateRoute from './components/ProtectedRoute';
+import FullPageEmotionAIChatbot from '../src/components/AiAssistant.jsx' 
 
-// Layout for pages that require Sidebar
 const Layout = () => (
   <div className="flex bg-black min-h-screen text-white">
     <Sidebar />
     <div className="flex-grow p-6 bg-black">
       <Routes>
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/monitor" element={<EmotionDetector />} />
+        <Route path="/monitor" element={<VideoStreamer />} />
         <Route path="/history" element={<History />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/feedback-dashboard" element={<FeedbackDashboard />} />
         <Route path="/insights" element={<Insights />} />
-        <Route path="/notifications" element={
-            <NotificationPage />
-        } />
+        <Route path="/notifications" element={<NotificationPage />} />
+        <Route path="/assistant" element={<FullPageEmotionAIChatbot />} />
       </Routes>
     </div>
   </div>
@@ -53,7 +53,6 @@ function App() {
             <Route path="/authPage" element={<AuthPage />} />
             <Route path="/register" element={<Navigate to="/authPage" />} />
             <Route path="/login" element={<Navigate to="/authPage" />} />
-            <Route path="/*" element={<Layout />} />
             <Route path="/docs" element={<Docs />} />
             <Route path="/second-docs" element={<Documentation />} />
             <Route path="/about" element={<About />} />
@@ -64,6 +63,12 @@ function App() {
             <Route path="/blog/:id" element={<BlogPost />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/forum" element={<CommunityForum />} />
+
+            <Route path="/*" element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            } />
           </Routes>
         </Router>
       </div>
