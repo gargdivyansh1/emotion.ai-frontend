@@ -1,24 +1,24 @@
+import React, { JSX, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Navigate, useLocation } from 'react-router-dom';
-import { PUBLIC_ROUTES } from '../utils/constants';
 
-interface PrivateRouteProps {
-  children: React.ReactNode;
-}
+const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-const PrivateRoute = ({ children }: PrivateRouteProps) => {
-  const { user, isLoading } = useAuth();
-  const location = useLocation();
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   if (isLoading) {
-    return <div className="text-white">Loading...</div>;
+    return <div className="flex justify-center items-center h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+    </div>;
   }
 
-  if (!user && !PUBLIC_ROUTES.includes(location.pathname)) {
-    return <Navigate to="/authPage" replace state={{ from: location }} />;
-  }
-
-  return <>{children}</>;
+  return isAuthenticated ? children : null;
 };
 
-export default PrivateRoute;
+export default ProtectedRoute;

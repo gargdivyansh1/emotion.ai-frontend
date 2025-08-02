@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
+import {useAuth} from '../context/AuthContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -20,6 +21,7 @@ const AuthPage: React.FC = () => {
     const [otp, setOtp] = useState("");
     const [isSendingOtp, setIsSendingOtp] = useState(false);
     const navigate = useNavigate();
+    const authContext = useAuth();
 
     useEffect(() => {
         setError("");
@@ -80,20 +82,9 @@ const AuthPage: React.FC = () => {
 
         try {
             if (isLogin) {
-                const formData = new URLSearchParams();
-                formData.append("username", email);
-                formData.append("password", password);
-
-                const res = await axios.post(`${API_BASE_URL}/auth/login`, formData, {
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                });
-
-                if (res.data.two_factor_required) {
-                    setTwoFactorRequired(true);
-                    await sendOtp(email);
-                } else {
-                    completeLogin(res.data);
-                }
+                await authContext.login(email, password);
+                toast.success("Login successful!");
+                navigate("/dashboard");
             } else {
                 await axios.post(`${API_BASE_URL}/auth/register`, {
                     username,
@@ -112,6 +103,11 @@ const AuthPage: React.FC = () => {
                 "Authentication failed. Please check your info.";
             setError(errorMessage);
             toast.error(errorMessage);
+            
+            if (err.response?.data?.two_factor_required) {
+                setTwoFactorRequired(true);
+                await sendOtp(email);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -136,24 +132,20 @@ const AuthPage: React.FC = () => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            await axios.post(`${API_BASE_URL}/api/verify_otp`, {
-                email,
-                otp,
-                enable: true 
-            });
-
             const formData = new URLSearchParams();
-            formData.append("email", email);
+            formData.append("username", email);
             formData.append("password", password);
             formData.append('otp', otp);
-
-            console.log(formData)
 
             const res = await axios.post(`${API_BASE_URL}/auth/complete-login`, formData, {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
             });
 
-            completeLogin(res.data);
+            localStorage.setItem("token", res.data.access_token);
+            await authContext.refreshAuth();
+            
+            toast.success("Login successful!");
+            navigate("/dashboard");
         } catch (err: any) {
             console.error("OTP verification error:", err);
             const errorMessage = err.response?.data?.detail ||
@@ -163,16 +155,6 @@ const AuthPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const completeLogin = (data: any) => {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user_role", data.role);
-        localStorage.setItem("user_id", data.user_id);
-        localStorage.setItem("is_verified", data.is_verified);
-
-        toast.success("Login successful!");
-        navigate("/dashboard");
     };
 
     const getPasswordStrengthColor = () => {

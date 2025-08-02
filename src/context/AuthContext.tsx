@@ -8,6 +8,7 @@ interface User {
   username: string;
   email: string;
   role: string;
+  is_verified: boolean;
 }
 
 interface AuthContextType {
@@ -15,7 +16,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
 }
@@ -37,6 +38,8 @@ authAxios.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
+}, (error) => {
+  return Promise.reject(error);
 });
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
@@ -44,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const isAuthenticated = !!user;
 
-  const fetchUser = useCallback(async (token: string) => {
+  const fetchUser = useCallback(async () => {
     try {
       const response = await authAxios.get('/auth/me');
       setUser(response.data);
@@ -65,7 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     try {
-      await fetchUser(token);
+      await fetchUser();
     } catch (error) {
       console.error("Authentication check failed", error);
     } finally {
@@ -77,17 +80,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, [checkAuth]);
 
-  const login = async (username: string, password: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const response = await authAxios.post(
         '/auth/login',
-        new URLSearchParams({ username, password }),
+        new URLSearchParams({ username: email, password }),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );
       
       localStorage.setItem('token', response.data.access_token);
-      await fetchUser(response.data.access_token);
+      await fetchUser();
     } catch (error) {
       console.error("Login failed", error);
       localStorage.removeItem('token');
@@ -105,7 +108,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const refreshAuth = async () => {
-    if (!localStorage.getItem('token')) return;
     await checkAuth();
   };
 
