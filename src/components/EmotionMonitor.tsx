@@ -19,6 +19,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const WEBSOCKET_URL = import.meta.env.VITE_API_WS_URL;
 
 const blackTheme = createTheme({
   palette: {
@@ -167,7 +168,7 @@ const VideoStreamer = () => {
 
       const token = localStorage.getItem('token');
 
-      const ws = new WebSocket(`ws://localhost:8000/ws/video/?token=${token}`);
+      const ws = new WebSocket(`${WEBSOCKET_URL}/ws/video/?token=${token}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
