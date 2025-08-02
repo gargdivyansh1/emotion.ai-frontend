@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import axios from 'axios';
-import { API_BASE_URL } from '../config';
 
-API_BASE_URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
 interface User {
   id: number;
@@ -28,7 +27,7 @@ interface AuthProviderProps {
 }
 
 const authAxios = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 
