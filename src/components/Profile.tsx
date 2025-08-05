@@ -51,7 +51,7 @@ type User = {
   profile_picture?: string;
   role: string;
   two_factor_enabled: boolean;
-}; 
+};
 
 type SessionTrend = {
   session: string;
@@ -172,37 +172,37 @@ const Profile: React.FC = () => {
   const [trends, setTrends] = useState([]);
 
   useEffect(() => {
-  const fetchTrends = async () => {
-    try {
-      const token = localStorage.getItem("token");
+    const fetchTrends = async () => {
+      try {
+        const token = localStorage.getItem("token");
 
-      const res = await axios.get(API_BASE_URL + "/emotion/user/emotions-trends", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        const res = await axios.get(API_BASE_URL + "/emotion/user/emotions-trends", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      const transformed = res.data.map((item) => {
-        const createdDate = moment(item.created_at).format("YYYY-MM-DD");
-        const duration = moment(item.period_end).diff(moment(item.period_start), "seconds"); 
-        const [moodAfter, moodBefore] = getTopMoods(item.emotion_summary);
-        return {
-          date: createdDate,
-          duration: `${duration} seconds`,
-          type: "Mindfulness",
-          moodBefore,
-          moodAfter,
-        };
-      });
+        const transformed = res.data.map((item) => {
+          const createdDate = moment(item.created_at).format("YYYY-MM-DD");
+          const duration = moment(item.period_end).diff(moment(item.period_start), "seconds");
+          const [moodAfter, moodBefore] = getTopMoods(item.emotion_summary);
+          return {
+            date: createdDate,
+            duration: `${duration} seconds`,
+            type: "Mindfulness",
+            moodBefore,
+            moodAfter,
+          };
+        });
 
-      setTrends(transformed);
-    } catch (error) {
-      console.error("Error fetching emotion trends:", error);
-    }
-  };
+        setTrends(transformed);
+      } catch (error) {
+        console.error("Error fetching emotion trends:", error);
+      }
+    };
 
-  fetchTrends();
-}, []);
+    fetchTrends();
+  }, []);
 
   const handleEnableClick = async () => {
     setShowModal(true);
@@ -366,33 +366,42 @@ const Profile: React.FC = () => {
 
 
   const confirmLogout = async () => {
+    setLoggingOut(true);
+
     try {
-      setLoggingOut(true);
       const token = localStorage.getItem("token");
 
       if (!token) {
         toast.error("No token found.");
+        setLoggingOut(false);
         return;
       }
 
-      await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await axios.post(
+        `${API_BASE_URL}/auth/logout`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       toast.success("Logout successful! Redirecting...", {
         position: "top-center",
       });
-
-      setTimeout(() => {
-        localStorage.removeItem("token");
-        window.location.href = "/";
-      }, 1500);
     } catch (error) {
       console.error("Logout failed:", error);
-      toast.error("Logout failed. Please try again.");
+      toast.error("Logout failed on server. Logging out anyway.", {
+        position: "top-center",
+      });
+    } finally {
+      localStorage.removeItem("token");
       setLoggingOut(false);
+
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1500);
     }
   };
 
