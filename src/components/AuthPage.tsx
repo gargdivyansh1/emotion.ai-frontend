@@ -3,7 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
-import {useAuth} from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import login_img from '@/utils/images/brain-2062057_1920.jpg';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -83,9 +83,23 @@ const AuthPage: React.FC = () => {
 
         try {
             if (isLogin) {
-                await authContext.login(email, password);
-                toast.success("Login successful!");
-                navigate("/dashboard");
+                const formData = new URLSearchParams();
+                formData.append('username', email);
+                formData.append('password', password);
+
+                const response = await axios.post(`${API_BASE_URL}/auth/login`, formData, {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                });
+
+                if (response.data.two_factor_required) {
+                    setTwoFactorRequired(true);
+                    await sendOtp(email);
+                } else {
+                    localStorage.setItem("token", response.data.access_token);
+                    await authContext.refreshAuth();
+                    toast.success("Login successful!");
+                    navigate("/dashboard");
+                }
             } else {
                 await axios.post(`${API_BASE_URL}/auth/register`, {
                     username,
@@ -104,11 +118,37 @@ const AuthPage: React.FC = () => {
                 "Authentication failed. Please check your info.";
             setError(errorMessage);
             toast.error(errorMessage);
-            
-            if (err.response?.data?.two_factor_required) {
-                setTwoFactorRequired(true);
-                await sendOtp(email);
-            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const verifyOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const formData = new URLSearchParams();
+            formData.append("email", email);
+            formData.append("password", password);
+            formData.append("otp", otp);
+
+            const response = await axios.post(`${API_BASE_URL}/auth/complete-login`, formData, {
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            });
+
+            localStorage.setItem("token", response.data.access_token);
+            await authContext.refreshAuth();
+
+            toast.success("Login successful!");
+            navigate("/dashboard");
+        } catch (err: any) {
+            console.error("OTP verification error:", err);
+            const errorMessage = err.response?.data?.detail ||
+                "Invalid OTP. Please try again.";
+            setError(errorMessage);
+            toast.error(errorMessage);
+
+            setOtp("");
         } finally {
             setIsLoading(false);
         }
@@ -129,35 +169,6 @@ const AuthPage: React.FC = () => {
         }
     };
 
-    const verifyOtp = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsLoading(true);
-        try {
-            const formData = new URLSearchParams();
-            formData.append("email", email);
-            formData.append("password", password);
-            formData.append('otp', otp);
-
-            const res = await axios.post(`${API_BASE_URL}/auth/complete-login`, formData, {
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            });
-
-            localStorage.setItem("token", res.data.access_token);
-            await authContext.refreshAuth();
-            
-            toast.success("Login successful!");
-            navigate("/dashboard");
-        } catch (err: any) {
-            console.error("OTP verification error:", err);
-            const errorMessage = err.response?.data?.detail ||
-                "Invalid OTP. Please try again.";
-            setError(errorMessage);
-            toast.error(errorMessage);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const getPasswordStrengthColor = () => {
         if (passwordStrength === 0) return "bg-gray-700";
         if (passwordStrength <= 2) return "bg-red-600";
@@ -169,12 +180,12 @@ const AuthPage: React.FC = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-black p-4">
                 <div className="absolute inset-0 z-0">
-                    <img 
-                        src={login_img} 
+                    <img
+                        src={login_img}
                         alt="Background"
                         className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/95"></div> 
+                    <div className="absolute inset-0 bg-black/95"></div>
                 </div>
                 <button
                     onClick={() => setTwoFactorRequired(false)}
@@ -255,21 +266,21 @@ const AuthPage: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-black p-4">
             <div className="absolute inset-0 z-0">
-                <img 
-                    src={login_img} 
+                <img
+                    src={login_img}
                     alt="Background"
                     className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black/95"></div> 
+                <div className="absolute inset-0 bg-black/95"></div>
             </div>
             <button
-                    onClick={goBack}
-                    className="absolute top-10 left-10 z-30 flex items-center gap-1 text-white hover:text-white"
-                    aria-label="Go back to home"
-                >
-                    <ArrowLeft size={18} />
-                    <span className="text-xl hidden sm:inline">Back</span>
-                </button>
+                onClick={goBack}
+                className="absolute top-10 left-10 z-30 flex items-center gap-1 text-white hover:text-white"
+                aria-label="Go back to home"
+            >
+                <ArrowLeft size={18} />
+                <span className="text-xl hidden sm:inline">Back</span>
+            </button>
             <div className="relative w-full max-w-4xl bg-black border border-gray-800">
                 <div className="flex flex-col md:flex-row">
                     <div className={`w-full md:w-1/2 bg-gray-900 p-6 sm:p-8`}>
