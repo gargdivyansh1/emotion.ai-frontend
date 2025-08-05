@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Brain, Activity, BarChart2, User, Smile, Frown, Meh, Clock, Award, ChevronRight, Twitter, Facebook, Linkedin, Instagram } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import screenshot from '@/utils/images/Screenshot 2025-07-27 110447.png';
+import screenshot from '@/utils/images/ss.png';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
