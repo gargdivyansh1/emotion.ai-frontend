@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   Button,
   Box,
@@ -12,9 +12,13 @@ import {
   useMediaQuery,
   Grid,
   Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Pause, PlayArrow, Stop, Info } from '@mui/icons-material';
+import { Pause, PlayArrow, Stop, Info, SwitchCamera } from '@mui/icons-material';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -124,50 +128,83 @@ const VideoStreamer = () => {
   const lastFrameTimeRef = useRef(0);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [sessionLimitReached, setSessionLimitReached] = useState(false);
-
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [isCameraSwitching, setIsCameraSwitching] = useState(false);
 
   const navigate = useNavigate();
-
   const isMobile = useMediaQuery('(max-width:600px)');
   const isTablet = useMediaQuery('(max-width:900px)');
 
-  useEffect(() => {
-    const initVideo = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: isMobile ? 320 : isTablet ? 480 : 640 },
-            height: { ideal: isMobile ? 240 : isTablet ? 360 : 480 },
-            facingMode: 'user'
-          },
-          audio: false
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-
-        return () => {
-          if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-          }
-        };
-      } catch (err) {
-        setError(`Could not access camera: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  const initVideo = useCallback(async () => {
+    try {
+      // Stop any existing stream
+      if (videoRef.current && videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
-    };
 
+      const constraints: MediaStreamConstraints = {
+        video: {
+          width: { ideal: isMobile ? 320 : isTablet ? 480 : 640 },
+          height: { ideal: isMobile ? 240 : isTablet ? 360 : 480 },
+          facingMode: selectedDeviceId ? undefined : facingMode,
+          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      // Get available devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setAvailableDevices(videoDevices);
+
+      // Set the selected device ID if not already set
+      if (videoDevices.length > 0 && !selectedDeviceId) {
+        const streamSettings = stream.getVideoTracks()[0].getSettings();
+        const currentDeviceId = streamSettings.deviceId;
+        if (currentDeviceId) {
+          setSelectedDeviceId(currentDeviceId);
+        }
+      }
+
+      setIsCameraSwitching(false);
+
+      return () => {
+        stream.getTracks().forEach(track => track.stop());
+      };
+    } catch (err) {
+      setError(`Could not access camera: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setIsCameraSwitching(false);
+    }
+  }, [facingMode, selectedDeviceId, isMobile, isTablet]);
+
+  useEffect(() => {
     initVideo();
-  }, [isMobile, isTablet]);
+  }, [initVideo]);
+
+  const toggleCamera = useCallback(() => {
+    setIsCameraSwitching(true);
+    setFacingMode(prevMode => prevMode === 'user' ? 'environment' : 'user');
+    setSelectedDeviceId(''); // Let the browser choose the appropriate camera
+  }, []);
+
+  const handleDeviceChange = useCallback((deviceId: string) => {
+    setIsCameraSwitching(true);
+    setSelectedDeviceId(deviceId);
+  }, []);
 
   useEffect(() => {
     if (!isStreaming) return;
 
     const connectWebSocket = () => {
-
       const token = localStorage.getItem('token');
-
       const ws = new WebSocket(`${WEBSOCKET_URL}/ws/video/?token=${token}`);
       wsRef.current = ws;
 
@@ -196,8 +233,8 @@ const VideoStreamer = () => {
         }
       };
 
-      ws.onerror = () => {
-        setError('WebSocket error occurred');
+      ws.onerror = (error) => {
+        setError(`WebSocket error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       };
 
       ws.onclose = () => {
@@ -249,7 +286,7 @@ const VideoStreamer = () => {
   };
 
   const processFrame = () => {
-    if (isPaused) {
+    if (isPaused || isCameraSwitching) {
       animationRef.current = requestAnimationFrame(processFrame);
       return;
     }
@@ -306,11 +343,8 @@ const VideoStreamer = () => {
   };
 
   const startSession = async () => {
-    console.log('Button Clicked');
-
     try {
       const token = localStorage.getItem('token');
-
       const response = await axios.post(
         API_BASE_URL + "/users/increment-session",
         null,
@@ -333,8 +367,6 @@ const VideoStreamer = () => {
       setIsPaused(false);
       setEmotionHistory([]);
       startTimeRef.current = performance.now();
-
-      console.log("Session started successfully");
     } catch (error) {
       console.error("Error starting session:", error);
     }
@@ -365,7 +397,7 @@ const VideoStreamer = () => {
     }
   };
 
-  const chartData = emotionHistory.map((data, index) => ({
+  const chartData = useMemo(() => emotionHistory.map((data, index) => ({
     time: index,
     emotion: data.emotion,
     confidence: data.confidence * 100,
@@ -374,7 +406,7 @@ const VideoStreamer = () => {
         [key, typeof value === 'number' ? value * 100 : value]
       )
     )
-  }));
+  })), [emotionHistory]);
 
   const emotionColors: Record<string, string> = {
     happy: '#4caf50',
@@ -418,14 +450,26 @@ const VideoStreamer = () => {
                 <Info color="primary" fontSize="small" />
               </Tooltip>
             </Typography>
-            <h2>After completing the session do refresh from the Insights section for immediately switch off the camera..</h2>
-
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              After completing the session, refresh from the Insights section to immediately switch off the camera.
+            </Typography>
           </Box>
 
           {sessionLimitReached && (
-            <div className="fixed top-5 right-5 bg-red-600 text-white px-6 py-4 rounded-lg shadow-md z-50">
+            <Box sx={{
+              position: 'fixed',
+              top: 20,
+              right: 20,
+              backgroundColor: 'error.main',
+              color: 'white',
+              px: 3,
+              py: 2,
+              borderRadius: '8px',
+              boxShadow: 3,
+              zIndex: 9999
+            }}>
               <strong>Session limit reached!</strong> Upgrade to a new plan to continue.
-            </div>
+            </Box>
           )}
 
           {error && (
@@ -489,10 +533,29 @@ const VideoStreamer = () => {
                         height: '100%',
                         display: 'block',
                         backgroundColor: '#000',
-                        objectFit: 'cover'
+                        objectFit: 'cover',
+                        transform: facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)'
                       }}
                     />
                     <canvas ref={canvasRef} style={{ display: 'none' }} />
+                    {isCameraSwitching && (
+                      <Box sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        zIndex: 1
+                      }}>
+                        <Typography variant="h6" sx={{ color: 'white' }}>
+                          Switching camera...
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
 
                   <Box sx={{
@@ -556,6 +619,58 @@ const VideoStreamer = () => {
                       </>
                     )}
                   </Box>
+
+                  {isStreaming && (
+                    <>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        startIcon={<SwitchCamera />}
+                        onClick={toggleCamera}
+                        fullWidth
+                        disabled={isCameraSwitching}
+                        sx={{
+                          mb: 2,
+                          borderColor: 'rgba(255, 255, 255, 0.23)',
+                          '&:hover': {
+                            borderColor: 'primary.main'
+                          }
+                        }}
+                      >
+                        {facingMode === 'user' ? 'Switch to Rear Camera' : 'Switch to Front Camera'}
+                      </Button>
+
+                      {availableDevices.length > 1 && (
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <InputLabel id="camera-select-label" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                            Select Camera
+                          </InputLabel>
+                          <Select
+                            labelId="camera-select-label"
+                            value={selectedDeviceId}
+                            onChange={(e) => handleDeviceChange(e.target.value as string)}
+                            label="Select Camera"
+                            disabled={isCameraSwitching}
+                            sx={{
+                              color: 'white',
+                              '.MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'rgba(255, 255, 255, 0.23)',
+                              },
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'rgba(255, 255, 255, 0.5)',
+                              },
+                            }}
+                          >
+                            {availableDevices.map((device) => (
+                              <MenuItem key={device.deviceId} value={device.deviceId}>
+                                {device.label || `Camera ${availableDevices.indexOf(device) + 1}`}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    </>
+                  )}
 
                   <Box sx={{
                     display: 'flex',
