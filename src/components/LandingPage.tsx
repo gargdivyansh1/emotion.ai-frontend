@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Brain, Activity, BarChart2, User, Smile, Frown, Meh, Clock, Award, ChevronRight, Twitter, Facebook, Linkedin, Instagram } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import screenshot from '@/utils/images/Screenshot 2025-07-27 110447.png';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -278,7 +279,7 @@ const LandingPage: React.FC = () => {
             <div className="bg-black rounded-2xl p-2 shadow-xl border border-gray-900">
               <div className="bg-gray-900 rounded-xl h-64 w-full overflow-hidden">
                 <img
-                  src="src/utils/images/Screenshot 2025-07-27 110447.png"
+                  src={screenshot}
                   alt="Screenshot"
                   className="w-full h-full "
                 />
