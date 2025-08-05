@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import {useAuth} from '../context/AuthContext';
+import login_img from '@/utils/images/brain-2062057_1920.jpg';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -169,7 +170,7 @@ const AuthPage: React.FC = () => {
             <div className="min-h-screen flex items-center justify-center bg-black p-4">
                 <div className="absolute inset-0 z-0">
                     <img 
-                        src="src/utils/images/brain-2062057_1920.jpg" 
+                        src={login_img} 
                         alt="Background"
                         className="w-full h-full object-cover"
                     />
@@ -255,7 +256,7 @@ const AuthPage: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-black p-4">
             <div className="absolute inset-0 z-0">
                 <img 
-                    src="src/utils/images/brain-2062057_1920.jpg" 
+                    src={login_img} 
                     alt="Background"
                     className="w-full h-full object-cover"
                 />
