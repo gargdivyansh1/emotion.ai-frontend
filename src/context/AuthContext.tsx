@@ -49,7 +49,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUser = useCallback(async () => {
     try {
-      const response = await authAxios.get('/auth/me');
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setUser(response.data);
       return true;
     } catch (error) {
