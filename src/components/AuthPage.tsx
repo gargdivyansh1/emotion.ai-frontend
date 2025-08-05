@@ -134,7 +134,7 @@ const AuthPage: React.FC = () => {
         setIsLoading(true);
         try {
             const formData = new URLSearchParams();
-            formData.append("username", email);
+            formData.append("email", email);
             formData.append("password", password);
             formData.append('otp', otp);
 
