@@ -142,7 +142,7 @@ const AuthPage: React.FC = () => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
             });
 
-            localStorage.setItem("token", res.data.jwt_token);
+            localStorage.setItem("token", res.data.access_token);
             await authContext.refreshAuth();
             
             toast.success("Login successful!");
